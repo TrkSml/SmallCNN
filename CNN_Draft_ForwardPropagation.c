@@ -4,13 +4,7 @@
 #define UPPER_BOUND 10.0
 #define GEN_RANDOM_SEED srand(time(NULL))
 #define DEBUG printf("debug !")
-/*
-typedef struct{
-   int index_width;
-   int index_height;
-   int value;
-} Block ;
-*/
+
 
 typedef struct {
     int depth;
@@ -25,7 +19,7 @@ float generate_random(){
 
 }
 
-void create_Random_Block(Block** grid, int input_depth, int input_height, int input_width){
+void create_Block(Block** grid, int input_depth, int input_height, int input_width,char* choice){
 
     *grid=(Block*)malloc(sizeof(Block));
     (*grid)->height=input_height;
@@ -35,7 +29,10 @@ void create_Random_Block(Block** grid, int input_depth, int input_height, int in
     float ***image=malloc(input_depth*sizeof(float**));
     int counter_depth;
 
+    if(choice=="random"){
+
     for(counter_depth=0;counter_depth<input_depth;counter_depth++){
+
         float **data_matrix=(float**)malloc(input_height*sizeof(float*));
         int counter_height;
         for(counter_height=0;counter_height<input_height;counter_height++){
@@ -50,6 +47,27 @@ void create_Random_Block(Block** grid, int input_depth, int input_height, int in
     }
 
     (*grid)->matrix=image;
+
+    }
+    else if(choice=="zeros"){
+
+        for(counter_depth=0;counter_depth<input_depth;counter_depth++){
+        float **data_matrix=(float**)malloc(input_height*sizeof(float*));
+        int counter_height;
+        for(counter_height=0;counter_height<input_height;counter_height++){
+            int counter_width;
+            float* row=(float*)malloc(input_width*(sizeof(float)));
+            for(counter_width=0;counter_width<input_width;counter_width++){
+                        *(row+counter_width)=0.0;
+                }
+            *(data_matrix+counter_height)=row;
+        }
+        *(image+counter_depth)=data_matrix;
+    }
+
+    (*grid)->matrix=image;
+
+    }
 
 }
 
@@ -108,6 +126,41 @@ Block* Extract_From_Block(Block* grid,\
 
 }
 
+Block* AddPadding(Block** block,int padding){
+
+    Block *output_Block;
+
+    int depth=(*block)->depth;
+    int height=(*block)->height;
+    int width=(*block)->width;
+    float ***block_matrix=(*block)->matrix;
+
+    create_Block(&output_Block,depth,height+2*padding,width+2*padding,"zeros");
+
+
+    float*** output_Block_matrix=output_Block->matrix;
+
+
+    int counter_depth;
+    int counter_width;
+    int counter_height;
+
+    for(counter_depth=0;counter_depth<depth;counter_depth++){
+        for(counter_height=padding;counter_height<padding+height;counter_height++){
+            for(counter_width=padding;counter_width<padding+width;counter_width++){
+
+                output_Block_matrix[counter_depth][counter_height][counter_width]=\
+                    block_matrix[counter_depth][counter_height-padding][counter_width-padding];
+
+            }
+        }
+    }
+
+    return output_Block;
+
+}
+
+
 
 void display_Block(Block* grid){
 
@@ -130,13 +183,18 @@ void display_Block(Block* grid){
 int main()
 {
 
+
     Block* layer;
     Block* layer1;
-    create_Random_Block(&layer,3,10,5);
-    layer1=Extract_From_Block(layer,0,3,0,3,0,3);
+    create_Block(&layer,3,10,5,"random");
     display_Block(layer);
-    display_Block(layer1);
 
+    /************ Extra *********/
+    /*
+    layer1=Extract_From_Block(layer,0,3,0,3,0,3);
+    layer1=AddPadding(&layer,1);
+    display_Block(layer1);
+    */
 
     return 0;
 }
