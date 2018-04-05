@@ -6,8 +6,17 @@
 #define UPPER_BOUND 10.0
 #define GEN_RANDOM_SEED srand(time(NULL))
 #define DEBUG printf("debug !")
-#define ERROR_DIMENSION printf("Dimension conflict: Please review the dimensions of the convolved arrays!")
-#define ERROR_DEPTH printf("Cannot perform convolution: Please make sure the kernel and the block have the same depth.")
+#define ERROR_DIMENSION printf("Dimension conflict: Please review the dimensions of the convolved arrays! \n")
+#define ERROR_DEPTH printf("Cannot perform convolution: Please make sure the kernel and the block have the same depth. \n")
+#define ERROR_NULL printf("Cannot perform convolution: Please make sure both the kernel and the block are not null. \n")
+
+
+typedef struct {
+    int width;
+    int height;
+    float** grid;
+
+} Grid;
 
 typedef struct {
     int depth;
@@ -140,13 +149,13 @@ Block* AddPadding(Block** block,int padding){
 
     create_Block(&output_Block,depth,height+2*padding,width+2*padding,"zeros");
 
-
     float*** output_Block_matrix=output_Block->matrix;
 
 
     int counter_depth;
     int counter_width;
     int counter_height;
+
 
     for(counter_depth=0;counter_depth<depth;counter_depth++){
         for(counter_height=padding;counter_height<padding+height;counter_height++){
@@ -158,6 +167,7 @@ Block* AddPadding(Block** block,int padding){
             }
         }
     }
+
 
     return output_Block;
 
@@ -175,8 +185,7 @@ float convolve_multiplication_sum(Block* block1, Block* block2){
         for(depth=0;depth<block1->depth;depth++){
             for(height=0;height<block1->height;height++){
                 for(width=0;width<block1->width;width++){
-                    output+=block1->matrix[depth][height][width]\
-                        *block2->matrix[depth][height][width];
+                    output+=block1->matrix[depth][height][width]*(block2->matrix[depth][height][width]);
             }
         }
     }
@@ -185,41 +194,62 @@ float convolve_multiplication_sum(Block* block1, Block* block2){
     }
 }
 
-float ** convolve(Block* block, Block* kernel, int stride, int padding){
+Grid* convolve(Block* block, Block* kernel, int stride, int padding){
 
-    if(block->depth!=kernel->depth){
+    if(block==NULL || kernel==NULL){
+        ERROR_NULL;
+        exit(0);
+
+    }
+    else if(block->depth!=kernel->depth){
 
         ERROR_DEPTH;
         exit(0);
+
     }else{
 
     int height=block->height;
 
-    AddPadding(&block,padding);
+    block=AddPadding(&block,padding);
+
     int size_output=(int)(floor((height-kernel->height+2*padding)/stride))+1;
-    float output_convolution[size_output][size_output];
+    // We might as well add a size_output for the width
 
     int size_half_kernel=(int)((kernel->height-1)/2);
     int begin_point_height=size_half_kernel;
-    int end_point_height=block->height-begin_point_height+1;
+    int end_point_height=block->height-begin_point_height;
 
-    int begin_point_width=begin_point_height;
-    int end_point_width=block->width-begin_point_width+1;
+    int begin_point_width=size_half_kernel;
+    int end_point_width=block->width-begin_point_width;
 
     int index_height_output;
     int index_width_output;
 
+    Grid* output_convolution_grid=(Grid*)malloc(sizeof(Grid));
+    output_convolution_grid->height=end_point_height-begin_point_height;
+    output_convolution_grid->width=end_point_width-begin_point_width;
+
+    float** grid=malloc(output_convolution_grid->height*sizeof(float*));
+
+
     for(index_height_output=begin_point_height;index_height_output<end_point_height;index_height_output++){
-        for(index_width_output=begin_point_width;index_width_output<size_output;begin_point_width++){
+        float *row=malloc(output_convolution_grid->width*sizeof(float));
+        for(index_width_output=begin_point_width;index_width_output<end_point_width;index_width_output++){
+
             Block* extracted_block=Extract_From_Block(block,0,kernel->depth,index_height_output-size_half_kernel,\
-                                                      index_height_output+size_half_kernel,index_width_output-size_half_kernel,\
-                                                      index_width_output+size_half_kernel);
-            output_convolution[index_height_output-begin_point_height][index_width_output-begin_point_width]=\
-                                convolve_multiplication_sum(extracted_block,kernel);
+                                                      index_height_output+size_half_kernel+1,index_width_output-size_half_kernel,\
+                                                      index_width_output+size_half_kernel+1);
+
+
+            *(row+index_width_output-begin_point_width)=convolve_multiplication_sum(extracted_block,kernel);
+
         }
+        *(grid+index_height_output-begin_point_height)=row;
     }
 
-    return output_convolution;
+    output_convolution_grid->grid=grid;
+
+    return output_convolution_grid;
    }
 
 }
@@ -243,25 +273,39 @@ void display_Block(Block* grid){
     printf("\n");
 }
 
+void display_Grid(Grid *table){
+    int row,col;
+
+    for(row=0;row<table->height;row++){
+        for(col=0;col<table->width;col++){
+            printf("%.2f |", table->grid[row][col]);
+            }
+        printf("\n");
+    }
+
+
+}
+
 
 int main()
 {
 
-
     Block* layer;
     Block* layer1;
-    create_Block(&layer,3,10,5,"random");
-    create_Block(&layer1,3,2,2,"random");
+    
+    create_Block(&layer,3,5,5,"random");
+    create_Block(&layer1,3,3,3,"random");
 
-    float **convolved;
-    cnvolved=convolve(layer,layer1,1,1);
+    Grid* grid;
+    grid=convolve(layer,layer1,1,0);
+
+    display_Grid(grid);
+
     /************ Extra *********/
-    /*
-    layer1=Extract_From_Block(layer,0,3,0,3,0,3);
-    layer1=AddPadding(&layer,1);
-    display_Block(layer1);
-    */
+
+    //layer1=Extract_From_Block(layer,0,3,0,3,0,3);
+    //layer1=AddPadding(&layer,1);
+    //display_Block(layer1);
 
     return 0;
-    
 }
