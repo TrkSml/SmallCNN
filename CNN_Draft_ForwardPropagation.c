@@ -84,7 +84,8 @@ void create_Block(Block** grid, int input_depth, int input_height, int input_wid
 }
 
 
-Block* Extract_From_Block(Block* grid,\
+Block* 
+Extract_From_Block(Block* grid,\
                           int begin_input_depth, int end_input_depth,\
                           int begin_input_height, int end_input_height,\
                           int begin_input_width, int end_input_width){
@@ -138,7 +139,8 @@ Block* Extract_From_Block(Block* grid,\
 
 }
 
-Block* AddPadding(Block** block,int padding){
+Block* 
+AddPadding(Block** block,int padding){
 
     Block *output_Block;
 
@@ -173,7 +175,8 @@ Block* AddPadding(Block** block,int padding){
 
 }
 
-float convolve_multiplication_sum(Block* block1, Block* block2){
+float 
+convolve_multiplication_sum(Block* block1, Block* block2){
     int depth,width,height;
     if(block1->depth!=block2->depth || block1->depth!=block2->depth ||\
                             block1->depth!=block2->depth){
@@ -194,7 +197,8 @@ float convolve_multiplication_sum(Block* block1, Block* block2){
     }
 }
 
-Grid* convolve(Block* block, Block* kernel, int stride, int padding){
+Grid* 
+convolve(Block* block, Block* kernel, int stride, int padding){
 
     if(block==NULL || kernel==NULL){
         ERROR_NULL;
