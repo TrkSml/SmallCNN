@@ -1,3 +1,5 @@
+// __author__ = Tarek Samaali
+
 #include <stdio.h>
 #include <time.h>
 #include <stdlib.h>
@@ -295,22 +297,22 @@ void create_Blocks(Blocks **blocks, int length, int depth, int height, int width
     }
 }
 
-Block* Convolution(Block *input, Blocks * kernels, int stride, int padding){
+void Convolution(Block **input, Blocks * kernels, int stride, int padding){
     Block* output=(Block*)malloc(sizeof(Block));
     output->depth=kernels->length;
-    output->height=determine_size_output(input->height,kernels->blocks[0]->height, padding, stride);
-    output->width=determine_size_output(input->width,kernels->blocks[0]->width, padding, stride);
+    output->height=determine_size_output((*input)->height,kernels->blocks[0]->height, padding, stride);
+    output->width=determine_size_output((*input)->width,kernels->blocks[0]->width, padding, stride);
     output->matrix=(float***)malloc(output->depth*sizeof(Grid));
 
     // We have now to fill the output_matrix;
 
     int index_output_depth;
     for(index_output_depth=0;index_output_depth<output->depth;index_output_depth++){
-        Grid* grid=convolve(input, kernels->blocks[index_output_depth],stride,padding);
+        Grid* grid=convolve(*input, kernels->blocks[index_output_depth],stride,padding);
         *(output->matrix+index_output_depth)=grid->grid;
     }
 
-    return output;
+    *input=output;
 
 }
 
@@ -357,15 +359,15 @@ int main()
     Blocks* kernels;
     create_Blocks(&kernels,6,3,3,3,"random");
 
-    Block* input;
-    Block* output;
-
     //Declaring the input with random values
+
+    Block* input;
+
     create_Block(&input,3,5,5,"random");
-    output=Convolution(input,kernels,1,1);
+    Convolution(&input,kernels,1,1);
 
     //Displaying the result convolution
-    display_Block(output);
+    display_Block(input);
 
     printf("DONE !\n");
 
