@@ -96,6 +96,31 @@ void create_Block(Block** grid, int input_depth, int input_height, int input_wid
 
 }
 
+void create_Blocks(Blocks **blocks, int length, int depth, int height, int width, char* choice){
+    if(length<1){
+
+        ERROR_CREATING_BLOCKS;
+        exit(0);
+
+    }else{
+
+       *blocks=(Blocks *)malloc(sizeof(Blocks));
+       Blocks* blocks_tmp=*blocks;
+       blocks_tmp->blocks=malloc(length*sizeof(Block));
+       int index_length;
+
+       for(index_length=0;index_length<length;index_length++){
+            Block *new_block=(Block*)malloc(sizeof(Block));
+            create_Block(&new_block,depth,height,width,choice);
+            //display_Block(new_block);
+            *(blocks_tmp->blocks+index_length)=new_block;
+       }
+
+       blocks_tmp->length=length;
+
+    }
+}
+
 
 Block* Extract_From_Block(Block* grid,\
                           int begin_input_depth, int end_input_depth,\
@@ -207,6 +232,37 @@ float convolve_multiplication_sum(Block* block1, Block* block2){
     }
 }
 
+float Pooling_On_Extracted_Grid(Grid* block, char* choice){
+    int width,height;
+
+    if(choice=="max"){
+        float output=0;
+        for(height=0;height<block->height;height++){
+            for(width=0;width<block->width;width++){
+                if(output<block->matrix[height][width])
+                    output=block->matrix[height][width];
+            }
+        }
+
+        return output;
+
+    }else if(choice=="average"){
+
+        //// Let us see
+        float output=0;
+        for(height=0;height<block->height;height++){
+            for(width=0;width<block->width;width++){
+                    output+=block->matrix[height][width];
+            }
+        }
+
+        return output/((block->height)*(block->width));
+
+    }
+    }
+
+
+
 int determine_size_output(int input_height, int kernel_height, int padding, int stride){
      return (int)(((input_height-kernel_height+2*padding)/stride))+1;
 }
@@ -268,34 +324,10 @@ Grid* convolve(Block* block, Block* kernel, int stride, int padding){
 
     return output_convolution_grid;
    }
-
 }
+
 
 //Can either be used to define the input images or the N * filters
-void create_Blocks(Blocks **blocks, int length, int depth, int height, int width, char* choice){
-    if(length<1){
-
-        ERROR_CREATING_BLOCKS;
-        exit(0);
-
-    }else{
-
-       *blocks=(Blocks *)malloc(sizeof(Blocks));
-       Blocks* blocks_tmp=*blocks;
-       blocks_tmp->blocks=malloc(length*sizeof(Block));
-       int index_length;
-
-       for(index_length=0;index_length<length;index_length++){
-            Block *new_block=(Block*)malloc(sizeof(Block));
-            create_Block(&new_block,depth,height,width,choice);
-            //display_Block(new_block);
-            *(blocks_tmp->blocks+index_length)=new_block;
-       }
-
-       blocks_tmp->length=length;
-
-    }
-}
 
 void Convolution(Block **input, Blocks * kernels, int stride, int padding){
     Block* output=(Block*)malloc(sizeof(Block));
@@ -373,3 +405,4 @@ int main()
 
     return 0;
 }
+
