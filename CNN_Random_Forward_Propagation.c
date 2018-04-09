@@ -16,7 +16,7 @@
 #define ERROR_EVEN_DIMENSIONS printf(" How about using a kernel with odd sizes :))) ! .. ");
 
 //2D output
-//After single convolution
+//After a single convolution
 typedef struct {
     int width;
     int height;
@@ -24,7 +24,7 @@ typedef struct {
 
 } Grid;
 
-//3D Block for a single
+//3D Block for a 3D Convolution
 typedef struct {
     int depth;
     int width;
@@ -33,7 +33,7 @@ typedef struct {
 } Block;
 
 //4D output
-//After convolution with N filters
+//Convolution with N filters
 typedef struct{
     int length;
     Block** blocks;
@@ -410,7 +410,7 @@ void Convolution(Block **input, Blocks * kernels, int stride, int padding){
     output->matrix=(float***)malloc(output->depth*sizeof(float**));
 
 
-    // We have now to fill the output_matrix;
+    // We now have to fill the output_matrix;
 
     int index_output_depth;
     for(index_output_depth=0;index_output_depth<output->depth;index_output_depth++){
