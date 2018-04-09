@@ -4,7 +4,6 @@
 #include <time.h>
 #include <stdlib.h>
 #include <math.h>
-#include<string.h>
 
 #define UPPER_BOUND .5
 #define GEN_RANDOM_SEED srand(time(NULL))
@@ -14,6 +13,9 @@
 #define ERROR_NULL printf("Cannot perform convolution: Please make sure both the kernel and the block are not null. \n")
 #define ERROR_CREATING_BLOCKS printf("Cannot create blocks : please make sure the length is > 1.\n");
 #define ERROR_EVEN_DIMENSIONS printf(" How about using a kernel with odd sizes :))) ! .. ");
+
+#define current_Layer(x) printf("\nCurrent Layer: %s\n",x)
+#define max(X, Y)  ((X) > (Y) ? (X) : (Y))
 
 //2D output
 //After single convolution
@@ -58,7 +60,7 @@ int determine_size_output(int input_height, int kernel_height, int padding, int 
 
 void shape_block(Block* block){
 
-    printf("\ndepth : %d \n",block->depth);
+    printf("depth : %d \n",block->depth);
     printf("height : %d \n",block->height);
     printf("width : %d \n",block->width);
 
@@ -403,6 +405,8 @@ Grid* convolve(Block* block, Block* kernel, int stride, int padding){
 void Convolution(Block **input, Blocks * kernels, int stride, int padding){
 
 
+    current_Layer("Convolution");
+
     Block* output=(Block*)malloc(sizeof(Block));
     output->depth=kernels->length;
     output->height=determine_size_output((*input)->height,kernels->blocks[0]->height, padding, stride);
@@ -433,8 +437,9 @@ float Pooling_On_Extracted_Grid(Grid* block, char* choice){
 
         for(height=0;height<block->height;height++){
             for(width=0;width<block->width;width++){
-                if(output<block->grid[height][width])
-                    output=block->grid[height][width];
+
+                output=max(output,block->grid[height][width]);
+
             }
         }
 
@@ -447,7 +452,9 @@ float Pooling_On_Extracted_Grid(Grid* block, char* choice){
         float output=0;
         for(height=0;height<block->height;height++){
             for(width=0;width<block->width;width++){
+
                     output+=block->grid[height][width];
+
             }
         }
 
@@ -522,6 +529,8 @@ Grid* Pooling_On_Grid(Grid* grid, int size_kernel, int padding,char* choice){
 void Pooling(Block **input, int size_kernel, int stride, int padding, char* choice){
 
 
+    current_Layer("Pooling");
+
     Block* output=(Block*)malloc(sizeof(Block));
     output->height=determine_size_output((*input)->height, size_kernel, padding, stride);
     output->width=determine_size_output((*input)->width, size_kernel, padding, stride);
@@ -550,6 +559,52 @@ void Pooling(Block **input, int size_kernel, int stride, int padding, char* choi
     }
 
     *input=output;
+
+}
+
+
+// Take a block and decrease both its width and height to 1
+void Flatten(Block **input){
+
+    //Block* block=*(input);
+    current_Layer("Flatten");
+    Block* block=(Block*)malloc(sizeof(Block));
+
+    block->depth=(*input)->depth*(*input)->height*(*input)->width;
+    block->width=1;
+    block->height=1;
+
+    float*** Flattened=(float***)malloc(block->depth*sizeof(float**));
+
+    int index_depth;
+    int index_height;
+    int index_width;
+
+    int counter_array_flattened=0;
+
+    for(index_depth=0;index_depth<(*input)->depth;index_depth++){
+            for(index_height=0;index_height<(*input)->height;index_height++){
+                for(index_width=0;index_width<(*input)->width;index_width++){
+
+                    float** decrease_height=(float**)malloc(sizeof(float*));
+                    float* decrease_width=(float*)malloc(sizeof(float));
+
+                    *decrease_width=(*input)->matrix[index_depth][index_height][index_width];
+                    *decrease_height=decrease_width;
+
+
+                    Flattened[counter_array_flattened]=decrease_height;
+
+                    counter_array_flattened++;
+
+            }
+
+        }
+
+    }
+
+    block->matrix=Flattened;
+    *input=block;
 
 }
 
@@ -615,8 +670,12 @@ void debug_code(){
     Pooling(&input,5,1,0,"max");
     shape_block(input);
 
+
+    Flatten(&input);
+    shape_block(input);
+
     //Display Input
-    //display_Block(input);
+    display_Block(input);
 
 }
 
