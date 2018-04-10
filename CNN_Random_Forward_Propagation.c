@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <math.h>
 
-#define UPPER_BOUND .5
+#define UPPER_BOUND 10
 #define GEN_RANDOM_SEED srand(time(NULL))
 #define DEBUG printf("debug !")
 #define ERROR_DIMENSION_CONV printf("Dimension conflict: Please review the dimensions of the convolved arrays! \n")
@@ -16,6 +16,7 @@
 
 #define current_Layer(x) printf("\nCurrent Layer: %s\n",x)
 #define max(X, Y)  ((X) > (Y) ? (X) : (Y))
+#define min(X, Y)  ((X) < (Y) ? (X) : (Y))
 
 //2D output
 //After single convolution
@@ -41,6 +42,14 @@ typedef struct{
     Block** blocks;
 }Blocks;
 
+typedef struct{
+
+    Grid* weights;
+    Grid* Before_Activation;
+    Grid* After_Activation;
+    float (*activation)(float);
+
+}FullyConnected;
 
 float generate_random(){
     return ((float)rand())/((float)RAND_MAX) * UPPER_BOUND;
@@ -56,6 +65,16 @@ int determine_size_output(int input_height, int kernel_height, int padding, int 
 
      return (int)(((input_height-kernel_height+2*padding)/stride))+1;
 }
+
+float relu(float x){
+    return max(0,x);
+}
+
+float sigmoid(float x){
+    return 1./(1.+exp(-x));
+
+}
+
 
 void shape_block(Block* block){
 
@@ -159,6 +178,22 @@ void create_Blocks(Blocks **blocks, int length, int depth, int height, int width
     }
 }
 
+
+
+
+void apply_function_to_Grid(Grid** grid, float (*pointer_to_function)(float)){
+    int index_width,index_height;
+
+    for(index_height=0;index_height<(*grid)->height;index_height++){
+        for(index_width=0;index_width<(*grid)->width;index_width++){
+                float* current_element=&((*grid)->grid[index_height][index_width]);
+                ((*grid)->grid[index_height][index_width])=(*pointer_to_function)(*current_element);
+
+
+        }
+    }
+
+}
 
 //Extract a smaller Grid From a Grid
 Grid* Extract_From_Grid(Grid* grid,\
@@ -627,6 +662,8 @@ void Flatten(Block **input){
 
 }
 
+// Creating the Fully connected layers
+
 
 void display_Block(Block* grid){
 
@@ -651,7 +688,7 @@ void display_Grid(Grid *table){
 
     for(row=0;row<table->height;row++){
         for(col=0;col<table->width;col++){
-            printf("%.2f |", table->grid[row][col]);
+            printf("%.5f |", table->grid[row][col]);
             }
         printf("\n");
     }
@@ -697,13 +734,13 @@ void debug_code(){
 
 }
 
+
 int main()
 {
 
     //Debugging the code
     debug_code();
 
-    printf("\nDONE !\n");
 
     return 0;
 }
