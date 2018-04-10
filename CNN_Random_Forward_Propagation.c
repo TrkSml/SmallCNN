@@ -675,7 +675,7 @@ void debug_code(){
     shape_block(input);
 
     //Display Input
-    display_Block(input);
+    //display_Block(input);
 
 }
 
