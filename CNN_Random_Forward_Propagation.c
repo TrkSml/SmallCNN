@@ -8,7 +8,7 @@
 #define UPPER_BOUND .5
 #define GEN_RANDOM_SEED srand(time(NULL))
 #define DEBUG printf("debug !")
-#define ERROR_DIMENSION printf("Dimension conflict: Please review the dimensions of the convolved arrays! \n")
+#define ERROR_DIMENSION_CONV printf("Dimension conflict: Please review the dimensions of the convolved arrays! \n")
 #define ERROR_DEPTH printf("Cannot perform convolution: Please make sure the kernel and the block have the same depth. \n")
 #define ERROR_NULL printf("Cannot perform convolution: Please make sure both the kernel and the block are not null. \n")
 #define ERROR_CREATING_BLOCKS printf("Cannot create blocks : please make sure the length is > 1.\n");
@@ -42,7 +42,6 @@ typedef struct{
 }Blocks;
 
 
-
 float generate_random(){
     return ((float)rand())/((float)RAND_MAX) * UPPER_BOUND;
 
@@ -66,6 +65,9 @@ void shape_block(Block* block){
 
 }
 
+int test_Block(Block* block){
+    return block->height && block->width && block->depth;
+}
 void create_Grid(Grid** grid, int input_height, int input_width,char* choice){
 
     *grid=(Grid*)malloc(sizeof(Grid));
@@ -309,7 +311,7 @@ float convolve_multiplication_sum(Block* block1, Block* block2){
 
     if(block1->depth!=block2->depth || block1->depth!=block2->depth ||\
                             block1->depth!=block2->depth){
-                                ERROR_DIMENSION;
+                                ERROR_DIMENSION_CONV;
                                 exit(0);
                             }
     else{
@@ -358,7 +360,7 @@ Grid* convolve(Block* block, Block* kernel, int stride, int padding){
 
     AddPadding_Block(&block,padding);
 
-    int size_half_kernel=(int)((kernel->height-1)/2);
+    int size_half_kernel=((kernel->height-1)/2);
     int begin_point_height=size_half_kernel;
     int end_point_height=block->height-begin_point_height;
 
@@ -369,17 +371,17 @@ Grid* convolve(Block* block, Block* kernel, int stride, int padding){
     int index_width_output;
 
     Grid* output_convolution_grid=(Grid*)malloc(sizeof(Grid));
-    output_convolution_grid->height=end_point_height-begin_point_height;
-    output_convolution_grid->width=end_point_width-begin_point_width;
+    output_convolution_grid->height=(int)(end_point_height-begin_point_height)/stride;
+    output_convolution_grid->width=(int)(end_point_width-begin_point_width)/stride;
 
     float** grid=(float**)malloc(output_convolution_grid->height*sizeof(float*));
 
 
-    for(index_height_output=begin_point_height;index_height_output<end_point_height;index_height_output++){
+    for(index_height_output=begin_point_height;index_height_output<end_point_height;index_height_output+=stride){
+
         float *row=(float*)malloc(output_convolution_grid->width*sizeof(float));
 
-        for(index_width_output=begin_point_width;index_width_output<end_point_width;index_width_output++){
-
+        for(index_width_output=begin_point_width;index_width_output<end_point_width;index_width_output+=stride){
 
 
             Block* extracted_block=Extract_From_Block(block,0,kernel->depth,index_height_output-size_half_kernel,\
@@ -387,11 +389,12 @@ Grid* convolve(Block* block, Block* kernel, int stride, int padding){
                                                       index_width_output+size_half_kernel+1);
 
 
-            *(row+index_width_output-begin_point_width)=convolve_multiplication_sum(extracted_block,kernel);
+            *(row+(index_width_output-begin_point_width)/stride)=convolve_multiplication_sum(extracted_block,kernel);
 
         }
-        *(grid+index_height_output-begin_point_height)=row;
+        *(grid+(index_height_output-begin_point_height)/stride)=row;
     }
+
 
     output_convolution_grid->grid=grid;
 
@@ -407,25 +410,34 @@ void Convolution(Block **input, Blocks * kernels, int stride, int padding){
 
     current_Layer("Convolution");
 
-    Block* output=(Block*)malloc(sizeof(Block));
-    output->depth=kernels->length;
-    output->height=determine_size_output((*input)->height,kernels->blocks[0]->height, padding, stride);
-    output->width=determine_size_output((*input)->width,kernels->blocks[0]->width, padding, stride);
-    output->matrix=(float***)malloc(output->depth*sizeof(float**));
-
-
-    // We have now to fill the output_matrix;
-
-    int index_output_depth;
-    for(index_output_depth=0;index_output_depth<output->depth;index_output_depth++){
-
-        Grid* grid=convolve(*input, kernels->blocks[index_output_depth],stride,padding);
-        *(output->matrix+index_output_depth)=grid->grid;
-        free(grid);
-
+    if(!test_Block(*input)){
+        ERROR_NULL;
+        exit(0);
     }
+    else
+    {
 
-    *input=output;
+        Block* output=(Block*)malloc(sizeof(Block));
+        output->depth=kernels->length;
+        output->height=determine_size_output((*input)->height,kernels->blocks[0]->height, padding, stride);
+        output->width=determine_size_output((*input)->width,kernels->blocks[0]->width, padding, stride);
+        output->matrix=(float***)malloc(output->depth*sizeof(float**));
+
+
+        // We have now to fill the output_matrix;
+
+        int index_output_depth;
+        for(index_output_depth=0;index_output_depth<output->depth;index_output_depth++){
+
+
+            Grid* grid=convolve(*input, kernels->blocks[index_output_depth],stride,padding);
+            *(output->matrix+index_output_depth)=grid->grid;
+            free(grid);
+
+        }
+
+        *input=output;
+    }
 
 }
 
@@ -464,7 +476,7 @@ float Pooling_On_Extracted_Grid(Grid* block, char* choice){
     }
 
 
-Grid* Pooling_On_Grid(Grid* grid, int size_kernel, int padding,char* choice){
+Grid* Pooling_On_Grid(Grid* grid, int size_kernel, int stride, int padding,char* choice){
 
     if(grid==NULL){
         ERROR_NULL;
@@ -485,7 +497,7 @@ Grid* Pooling_On_Grid(Grid* grid, int size_kernel, int padding,char* choice){
 
     // We might as well add a size_output for the width
 
-    int size_half_kernel=(int)((size_kernel-1)/2);
+    int size_half_kernel=((size_kernel-1)/2);
     int begin_point_height=size_half_kernel;
     int end_point_height=grid->height-begin_point_height;
 
@@ -496,8 +508,8 @@ Grid* Pooling_On_Grid(Grid* grid, int size_kernel, int padding,char* choice){
     int index_width_output;
 
     Grid* output_convolution_grid=(Grid*)malloc(sizeof(Grid));
-    output_convolution_grid->height=end_point_height-begin_point_height;
-    output_convolution_grid->width=end_point_width-begin_point_width;
+    output_convolution_grid->height=(end_point_height-begin_point_height)/stride;
+    output_convolution_grid->width=(end_point_width-begin_point_width)/stride;
 
     output_convolution_grid->grid=(float**)malloc(output_convolution_grid->height*sizeof(float*));
 
@@ -512,10 +524,10 @@ Grid* Pooling_On_Grid(Grid* grid, int size_kernel, int padding,char* choice){
                                                       index_width_output+size_half_kernel+1);
 
 
-            *(row+index_width_output-begin_point_width)=Pooling_On_Extracted_Grid(extracted_grid,choice);
+            *(row+(index_width_output-begin_point_width)/stride)=Pooling_On_Extracted_Grid(extracted_grid,choice);
 
         }
-        *(output_convolution_grid->grid+index_height_output-begin_point_height)=row;
+        *(output_convolution_grid->grid+(index_height_output-begin_point_height)/stride)=row;
     }
 
 
@@ -528,8 +540,14 @@ Grid* Pooling_On_Grid(Grid* grid, int size_kernel, int padding,char* choice){
 // We will continue at this level
 void Pooling(Block **input, int size_kernel, int stride, int padding, char* choice){
 
-
     current_Layer("Pooling");
+
+    if(!test_Block(*input)){
+        ERROR_NULL;
+        exit(0);
+    }
+    else
+    {
 
     Block* output=(Block*)malloc(sizeof(Block));
     output->height=determine_size_output((*input)->height, size_kernel, padding, stride);
@@ -549,7 +567,7 @@ void Pooling(Block **input, int size_kernel, int stride, int padding, char* choi
         grid_from_current_block->width=(*input)->width;
         grid_from_current_block->grid=(*input)->matrix[index_output_depth];
 
-        Grid* pooled_grid=Pooling_On_Grid(grid_from_current_block,size_kernel,padding,choice);
+        Grid* pooled_grid=Pooling_On_Grid(grid_from_current_block,size_kernel,stride,padding,choice);
 
         *(output->matrix+index_output_depth)=pooled_grid->grid;
 
@@ -560,6 +578,7 @@ void Pooling(Block **input, int size_kernel, int stride, int padding, char* choi
 
     *input=output;
 
+    }
 }
 
 
@@ -656,7 +675,7 @@ void debug_code(){
     shape_block(input);
 
     //Pooling Layer
-    Pooling(&input,3,1,1,"max");
+    Pooling(&input,3,2,1,"max");
     shape_block(input);
 
     Blocks* kernels_bis;
@@ -675,7 +694,6 @@ void debug_code(){
     shape_block(input);
 
     //Display Input
-    //display_Block(input);
 
 }
 
