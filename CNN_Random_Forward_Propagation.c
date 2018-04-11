@@ -18,7 +18,6 @@
 #define ERROR_DIMENSION_GRID_MULT printf("Please review the dimonsions of the grid you want to perform multiplication on.\n")
 #define ERROR_DIM_FLATTEN printf("Input must be flattened.\n")
 
-
 #define current_Layer(x) printf("\nCurrent Layer: %s\n",x)
 #define max(X, Y)  ((X) > (Y) ? (X) : (Y))
 #define min(X, Y)  ((X) < (Y) ? (X) : (Y))
@@ -89,6 +88,14 @@ void shape_block(Block* block){
 
 }
 
+void shape_grid(Grid* grid){
+
+    printf("\nheight : %d \n",grid->height);
+    printf("width : %d \n",grid->width);
+
+}
+
+
 int test_block_null_dimension(Block* block){
 
     return block->height && block->width && block->depth;
@@ -103,6 +110,19 @@ int test_grid_null_dimension(Grid* grid){
 int test_block_for_fully_connected(Block* block){
 
     return block->width==1 && block->height==1 ;
+}
+
+int test_for_grid_elementwise_multiplication(Grid* grid1, Grid* grid2){
+
+    return grid1->height==grid2->height && grid1->width==grid2->width ;
+
+}
+
+int test_for_grid_dot_multiplication(Grid* grid1, Grid* grid2){
+
+    // Test with transpose  !
+
+    return grid1->height==grid2->width;
 }
 
 void create_Grid(Grid** grid,unsigned int input_height,unsigned int input_width,char* choice){
@@ -144,10 +164,14 @@ void create_Grid(Grid** grid,unsigned int input_height,unsigned int input_width,
             *((*grid)->grid+counter_height)=row;
         }
 
-
     }
+}
+
+Grid* transpose(Grid* grid_to_transpose){
+
 
 }
+
 
 void create_Block(Block** block,unsigned int input_depth,unsigned int input_height,unsigned int input_width,char* choice){
 
@@ -673,6 +697,26 @@ void Pooling(Block **input,unsigned int size_kernel,unsigned int stride,unsigned
 
 
 // Take a block and decrease both its width and height to 1
+void extract_Grid_From_Flatten_Block(Block** block, Grid** grid){
+
+    *grid=(Grid*)malloc(sizeof(Grid));
+    (*grid)->height=(*block)->height;
+    (*grid)->width=(*block)->depth;
+
+    (*grid)->grid=(float**)malloc(sizeof(float*));
+    float* row=(float*)malloc((*grid)->width*sizeof(float));
+
+    unsigned int index_depth;
+    for(index_depth=0;index_depth<(*grid)->width;index_depth++){
+
+        *(row+index_depth)=(*block)->matrix[index_depth][0][0];
+    }
+
+    *((*grid)->grid)=row;
+
+}
+
+
 void Flatten(Block **input){
 
     //Block* block=*(input);
@@ -782,9 +826,7 @@ void grid_dot_mutiplication(Grid** output_grid, Grid** grid1, Grid** grid2){
                 for(index_forgotten=0;index_forgotten<(*grid1)->width;index_forgotten++){
                     sum_forgotten+=(*grid1)->grid[index_height][index_forgotten]*((*grid2)->grid[index_forgotten][index_width]);
 
-
                 }
-
                 *(row+index_width)=sum_forgotten;
 
             }
@@ -798,7 +840,7 @@ void grid_dot_mutiplication(Grid** output_grid, Grid** grid1, Grid** grid2){
 
 void grid_element_wise_mutiplication(Grid** output_grid, Grid** grid1, Grid** grid2){
 
-    if((*grid1)->height!=(*grid2)->height && (*grid1)->width!=(*grid2)->width){
+    if(!test_for_grid_elementwise_multiplication(*grid1,*grid2)){
 
         ERROR_DIMENSION_GRID_MULT;
         exit(0);
@@ -809,13 +851,11 @@ void grid_element_wise_mutiplication(Grid** output_grid, Grid** grid1, Grid** gr
         *output_grid=(Grid*)malloc(sizeof(Grid));
         (*output_grid)->height=(*grid1)->height;
         (*output_grid)->width=(*grid1)->width;
-
         (*output_grid)->grid=(float**)malloc((*output_grid)->height*sizeof(float*));
 
         int index_height, index_width;
 
         for(index_height=0;index_height<(*output_grid)->height;index_height++){
-
 
             float* row=(float*)malloc((*output_grid)->height*sizeof(float));
 
@@ -845,6 +885,7 @@ void Fully_Connected_After_Flatten(FullyConnected** fc, Block** input, float (*a
         }else
         // We suppose that the fully connected layer is created for the first time
         {
+
             FullyConnected* local_fc=*fc;
             local_fc=(FullyConnected*)malloc(sizeof(FullyConnected));
 
@@ -858,15 +899,21 @@ void Fully_Connected_After_Flatten(FullyConnected** fc, Block** input, float (*a
             local_fc->weights=weights_tmp;
             local_fc->activation=activation;
 
+
+            Grid* Zi;
+            Grid* input_grid;
+
+            extract_Grid_From_Flatten_Block(input,&input_grid);
+
+            // --> multiply input_grid & local_fc->weights
+
+            //grid_dot_mutiplication(&Zi,&weights_tmp,&);
+
             /*
             determine the zi before activations
             determine the a_i after activations
 
             */
-
-
-
-
 
             }
         }
@@ -947,7 +994,7 @@ void debug_code(){
     shape_block(input);
 
     FullyConnected* fc=NULL;
-    Fully_Connected_After_Flatten(&fc,&input,&relu,120);
+    //Fully_Connected_After_Flatten(&fc,&input,&relu,120);
 
     //Display Input
 
