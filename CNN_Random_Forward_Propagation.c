@@ -7,7 +7,7 @@
 #include <stdarg.h>
 
 
-#define UPPER_BOUND 10
+#define UPPER_BOUND .5
 #define GEN_RANDOM_SEED srand(time(NULL))
 #define DEBUG printf("debug !")
 #define ERROR_DIMENSION_CONV printf("Dimension conflict: Please review the dimensions of the convolved arrays! \n")
@@ -15,6 +15,7 @@
 #define ERROR_NULL printf("Cannot perform convolution: Please make sure both the kernel and the block are not null. \n")
 #define ERROR_CREATING_BLOCKS printf("Cannot create blocks : please make sure the length is > 1.\n");
 #define ERROR_EVEN_DIMENSIONS printf(" How about using a kernel with odd sizes :))) ! .. ");
+#define ERROR_DIMENSION_GRID_MULT printf("Please review the dimonsions of the grid you want to perforl multiplication on.\n");
 
 #define current_Layer(x) printf("\nCurrent Layer: %s\n",x)
 #define max(X, Y)  ((X) > (Y) ? (X) : (Y))
@@ -23,24 +24,24 @@
 //2D output
 //After single convolution
 typedef struct {
-   unsigned int width;
-   unsigned int height;
+    int width;
+    int height;
     float** grid;
 
 } Grid;
 
 //3D Block for a single
 typedef struct {
-   unsigned int depth;
-   unsigned int width;
-   unsigned int height;
+    int depth;
+    int width;
+    int height;
     float*** matrix;
 } Block;
 
 //4D output
 //After convolution with N filters
 typedef struct{
-   unsigned int length;
+    int length;
     Block** blocks;
 }Blocks;
 
@@ -63,7 +64,7 @@ int control_parity_kernel_size(int size_kernel){
 }
 
 
-int determine_size_output(int input_height,unsigned int kernel_height,unsigned int padding,unsigned int stride){
+int determine_size_output(int input_height, int kernel_height, int padding, int stride){
 
      return (int)(((input_height-kernel_height+2*padding)/stride))+1;
 }
@@ -88,7 +89,7 @@ void shape_block(Block* block){
 int test_Block(Block* block){
     return block->height && block->width && block->depth;
 }
-void create_Grid(Grid** grid,unsigned int input_height,unsigned int input_width,char* choice){
+void create_Grid(Grid** grid, int input_height, int input_width,char* choice){
 
     *grid=(Grid*)malloc(sizeof(Grid));
     (*grid)->height=input_height;
@@ -98,10 +99,10 @@ void create_Grid(Grid** grid,unsigned int input_height,unsigned int input_width,
     if(choice=="random"){
 
         (*grid)->grid=(float**)malloc(input_height*sizeof(float*));
-       unsigned int counter_height;
+        int counter_height;
 
         for(counter_height=0;counter_height<input_height;counter_height++){
-           unsigned int counter_width;
+            int counter_width;
             float* row=(float*)malloc(input_width*(sizeof(float)));
 
             for(counter_width=0;counter_width<input_width;counter_width++){
@@ -115,10 +116,10 @@ void create_Grid(Grid** grid,unsigned int input_height,unsigned int input_width,
     else if(choice=="zeros"){
 
        (*grid)->grid=(float**)malloc(input_height*sizeof(float*));
-       unsigned int counter_height;
+        int counter_height;
 
         for(counter_height=0;counter_height<input_height;counter_height++){
-           unsigned int counter_width;
+            int counter_width;
             float* row=(float*)malloc(input_width*(sizeof(float)));
 
             for(counter_width=0;counter_width<input_width;counter_width++){
@@ -132,7 +133,7 @@ void create_Grid(Grid** grid,unsigned int input_height,unsigned int input_width,
 
 }
 
-void create_Block(Block** block,unsigned int input_depth,unsigned int input_height,unsigned int input_width,char* choice){
+void create_Block(Block** block, int input_depth, int input_height, int input_width,char* choice){
 
     *block=(Block*)malloc(sizeof(Block));
     (*block)->height=input_height;
@@ -141,7 +142,7 @@ void create_Block(Block** block,unsigned int input_depth,unsigned int input_heig
 
     (*block)->matrix=(float***)malloc(input_depth*sizeof(float**));
 
-   unsigned int index_depth;
+    int index_depth;
     for(index_depth=0;index_depth<input_depth;index_depth++){
 
         Grid* grid;
@@ -153,7 +154,7 @@ void create_Block(Block** block,unsigned int input_depth,unsigned int input_heig
 }
 
 
-void create_Blocks(Blocks **blocks,unsigned int length,unsigned int depth,unsigned int height,unsigned int width, char* choice){
+void create_Blocks(Blocks **blocks, int length, int depth, int height, int width, char* choice){
 
     if(length<1){
 
@@ -165,7 +166,7 @@ void create_Blocks(Blocks **blocks,unsigned int length,unsigned int depth,unsign
        *blocks=(Blocks *)malloc(sizeof(Blocks));
        Blocks* blocks_tmp=*blocks;
        blocks_tmp->blocks=malloc(length*sizeof(Block));
-      unsigned int index_length;
+       int index_length;
 
        for(index_length=0;index_length<length;index_length++){
             Block *new_block=(Block*)malloc(sizeof(Block));
@@ -183,7 +184,7 @@ void create_Blocks(Blocks **blocks,unsigned int length,unsigned int depth,unsign
 
 
 void apply_function_to_Grid(Grid** grid, float (*pointer_to_function)(float)){
-   unsigned int index_width,index_height;
+    unsigned int index_width,index_height;
 
     for(index_height=0;index_height<(*grid)->height;index_height++){
         for(index_width=0;index_width<(*grid)->width;index_width++){
@@ -196,28 +197,55 @@ void apply_function_to_Grid(Grid** grid, float (*pointer_to_function)(float)){
 
 }
 
+void apply_function_to_Block(Block** block, float (*pointer_to_function)(float)){
+
+    unsigned int index_depth;
+    unsigned int height=(*block)->height;
+    unsigned int width=(*block)->width;
+
+    for(index_depth=0;index_depth<(*block)->depth;index_depth++){
+
+            Grid* current_depth=(Grid*)malloc(sizeof(Grid));
+
+            (current_depth)->height=height;
+            (current_depth)->width=width;
+            (current_depth)->grid=(*block)->matrix[index_depth];
+
+
+            apply_function_to_Grid(&current_depth,pointer_to_function);
+
+            (*block)->matrix[index_depth]=current_depth->grid;
+
+            free(current_depth);
+
+    }
+
+
+
+}
+
 //Extract a smaller Grid From a Grid
 Grid* Extract_From_Grid(Grid* grid,\
-                         unsigned int begin_input_height,unsigned int end_input_height,\
-                         unsigned int begin_input_width,unsigned int end_input_width){
+                          int begin_input_height, int end_input_height,\
+                          int begin_input_width, int end_input_width){
 
     Grid* output_grid=(Grid*)malloc(sizeof(Grid));
 
-   unsigned int size_height=end_input_height-begin_input_height;
-   unsigned int size_width=end_input_width-begin_input_width;
+    int size_height=end_input_height-begin_input_height;
+    int size_width=end_input_width-begin_input_width;
 
     output_grid->width=size_width;
     output_grid->height=size_height;
 
     output_grid->grid=(float**)malloc(output_grid->height*sizeof(float*));
 
-   unsigned int counter_height;
-   unsigned int new_counter_height=0;
+    int counter_height;
+    int new_counter_height=0;
 
     for(counter_height=begin_input_height;counter_height<end_input_height;counter_height++){
 
-       unsigned int counter_width;
-       unsigned int new_counter_width=0;
+        int counter_width;
+        int new_counter_width=0;
         float* row=(float*)malloc(output_grid->width*(sizeof(float)));
 
         for(counter_width=begin_input_width;counter_width<end_input_width;counter_width++){
@@ -236,16 +264,16 @@ Grid* Extract_From_Grid(Grid* grid,\
 
 
 Block* Extract_From_Block(Block* grid,\
-                         unsigned int begin_input_depth,unsigned int end_input_depth,\
-                         unsigned int begin_input_height,unsigned int end_input_height,\
-                         unsigned int begin_input_width,unsigned int end_input_width){
+                          int begin_input_depth, int end_input_depth,\
+                          int begin_input_height, int end_input_height,\
+                          int begin_input_width, int end_input_width){
 
 
     Block* output_grid=(Block*)malloc(sizeof(Block));
 
-   unsigned int size_depth=end_input_depth-begin_input_depth;
-   unsigned int size_height=end_input_height-begin_input_height;
-   unsigned int size_width=end_input_width-begin_input_width;
+    int size_depth=end_input_depth-begin_input_depth;
+    int size_height=end_input_height-begin_input_height;
+    int size_width=end_input_width-begin_input_width;
 
     output_grid->depth=size_depth;
     output_grid->width=size_width;
@@ -253,8 +281,8 @@ Block* Extract_From_Block(Block* grid,\
 
     output_grid->matrix=(float***)malloc(size_depth*sizeof(float**));
 
-   unsigned int counter_depth;
-   unsigned int new_counter_depth=0;
+    int counter_depth;
+    int new_counter_depth=0;
 
     for(counter_depth=begin_input_depth;counter_depth<end_input_depth;counter_depth++){
 
@@ -281,16 +309,16 @@ Grid* AddPadding_Grid(Grid** block,int padding){
 
     Grid* output_grid;
 
-   unsigned int height=(*block)->height;
-   unsigned int width=(*block)->width;
+    int height=(*block)->height;
+    int width=(*block)->width;
     float **block_matrix=(*block)->grid;
 
     create_Grid(&output_grid,height+2*padding,width+2*padding,"zeros");
 
     //float** output_grid_matrix=output_grid->grid;
 
-   unsigned int counter_height;
-   unsigned int counter_width;
+    int counter_height;
+    int counter_width;
 
 
         for(counter_height=padding;counter_height<padding+height;counter_height++){
@@ -319,7 +347,7 @@ void AddPadding_Block(Block** block,int padding){
     output_Block->matrix=(float***)malloc(output_Block->depth*sizeof(float**));
 
 
-   unsigned int counter_depth;
+    int counter_depth;
 
     for(counter_depth=0;counter_depth<output_Block->depth;counter_depth++){
 
@@ -343,7 +371,7 @@ void AddPadding_Block(Block** block,int padding){
 }
 
 float convolve_multiplication_sum(Block* block1, Block* block2){
-   unsigned int depth,width,height;
+    int depth,width,height;
 
     if(block1->depth!=block2->depth || block1->depth!=block2->depth ||\
                             block1->depth!=block2->depth){
@@ -369,7 +397,7 @@ float convolve_multiplication_sum(Block* block1, Block* block2){
 
 
 
-Grid* convolve(Block* block, Block* kernel,unsigned int stride,unsigned int padding){
+Grid* convolve(Block* block, Block* kernel, int stride, int padding){
 
     //DEBUG;
     if(!control_parity_kernel_size(kernel->height) || !control_parity_kernel_size(kernel->width)){
@@ -392,19 +420,19 @@ Grid* convolve(Block* block, Block* kernel,unsigned int stride,unsigned int padd
     }
     else{
 
-   unsigned int height=block->height;
+    int height=block->height;
 
     AddPadding_Block(&block,padding);
 
-   unsigned int size_half_kernel=((kernel->height-1)/2);
-   unsigned int begin_point_height=size_half_kernel;
-   unsigned int end_point_height=block->height-begin_point_height;
+    int size_half_kernel=((kernel->height-1)/2);
+    int begin_point_height=size_half_kernel;
+    int end_point_height=block->height-begin_point_height;
 
-   unsigned int begin_point_width=size_half_kernel;
-   unsigned int end_point_width=block->width-begin_point_width;
+    int begin_point_width=size_half_kernel;
+    int end_point_width=block->width-begin_point_width;
 
-   unsigned int index_height_output;
-   unsigned int index_width_output;
+    int index_height_output;
+    int index_width_output;
 
     Grid* output_convolution_grid=(Grid*)malloc(sizeof(Grid));
     output_convolution_grid->height=(int)(end_point_height-begin_point_height)/stride;
@@ -441,7 +469,7 @@ Grid* convolve(Block* block, Block* kernel,unsigned int stride,unsigned int padd
 
 //Can either be used to define the input images or the N * filters
 
-void Convolution(Block **input, Blocks * kernels,unsigned int stride,unsigned int padding){
+void Convolution(Block **input, Blocks * kernels, int stride, int padding){
 
 
     current_Layer("Convolution");
@@ -462,7 +490,7 @@ void Convolution(Block **input, Blocks * kernels,unsigned int stride,unsigned in
 
         // We have now to fill the output_matrix;
 
-       unsigned int index_output_depth;
+        int index_output_depth;
         for(index_output_depth=0;index_output_depth<output->depth;index_output_depth++){
 
 
@@ -478,7 +506,7 @@ void Convolution(Block **input, Blocks * kernels,unsigned int stride,unsigned in
 }
 
 float Pooling_On_Extracted_Grid(Grid* block, char* choice){
-   unsigned int width,height;
+    int width,height;
 
     if(choice=="max"){
         float output=0;
@@ -512,7 +540,7 @@ float Pooling_On_Extracted_Grid(Grid* block, char* choice){
     }
 
 
-Grid* Pooling_On_Grid(Grid* grid,unsigned int size_kernel,unsigned int stride,unsigned int padding,char* choice){
+Grid* Pooling_On_Grid(Grid* grid, int size_kernel, int stride, int padding,char* choice){
 
     if(grid==NULL){
         ERROR_NULL;
@@ -527,21 +555,21 @@ Grid* Pooling_On_Grid(Grid* grid,unsigned int size_kernel,unsigned int stride,un
     }
     else {
 
-   unsigned int height=grid->height;
+    int height=grid->height;
 
     grid=AddPadding_Grid(&grid,padding);
 
     // We might as well add a size_output for the width
 
-   unsigned int size_half_kernel=((size_kernel-1)/2);
-   unsigned int begin_point_height=size_half_kernel;
-   unsigned int end_point_height=grid->height-begin_point_height;
+    int size_half_kernel=((size_kernel-1)/2);
+    int begin_point_height=size_half_kernel;
+    int end_point_height=grid->height-begin_point_height;
 
-   unsigned int begin_point_width=size_half_kernel;
-   unsigned int end_point_width=grid->width-begin_point_width;
+    int begin_point_width=size_half_kernel;
+    int end_point_width=grid->width-begin_point_width;
 
-   unsigned int index_height_output;
-   unsigned int index_width_output;
+    int index_height_output;
+    int index_width_output;
 
     Grid* output_convolution_grid=(Grid*)malloc(sizeof(Grid));
     output_convolution_grid->height=(end_point_height-begin_point_height)/stride;
@@ -574,7 +602,7 @@ Grid* Pooling_On_Grid(Grid* grid,unsigned int size_kernel,unsigned int stride,un
 }
 
 // We will continue at this level
-void Pooling(Block **input,unsigned int size_kernel,unsigned int stride,unsigned int padding, char* choice){
+void Pooling(Block **input, int size_kernel, int stride, int padding, char* choice){
 
     current_Layer("Pooling");
 
@@ -595,7 +623,7 @@ void Pooling(Block **input,unsigned int size_kernel,unsigned int stride,unsigned
     // We have now to fill the output_matrix;
 
 
-   unsigned int index_output_depth;
+    int index_output_depth;
     for(index_output_depth=0;index_output_depth<output->depth;index_output_depth++){
 
         Grid* grid_from_current_block=(Grid*)malloc(sizeof(Grid));
@@ -631,11 +659,11 @@ void Flatten(Block **input){
 
     float*** Flattened=(float***)malloc(block->depth*sizeof(float**));
 
-   unsigned int index_depth;
-   unsigned int index_height;
-   unsigned int index_width;
+    int index_depth;
+    int index_height;
+    int index_width;
 
-   unsigned int counter_array_flattened=0;
+    int counter_array_flattened=0;
 
     for(index_depth=0;index_depth<(*input)->depth;index_depth++){
             for(index_height=0;index_height<(*input)->height;index_height++){
@@ -665,7 +693,7 @@ void Flatten(Block **input){
 
 void Stack_Blocks(int nbr_arguments,... ){
 
-   unsigned int i;
+    int i;
     va_list argptr;
     /* initialize argptr for nbr_arguments number of arguments */
     va_start(argptr, nbr_arguments);
@@ -686,11 +714,91 @@ void Stack_Blocks(int nbr_arguments,... ){
 }
 
 // Creating the Fully connected layers
+void grid_dot_mutiplication(Grid** output_grid, Grid** grid1, Grid** grid2){
 
+    if((*grid1)->height!=(*grid2)->width){
+
+        ERROR_DIMENSION_GRID_MULT;
+        exit(0);
+
+    }
+    else{
+
+        *output_grid=(Grid*)malloc(sizeof(Grid));
+        (*output_grid)->height=(*grid1)->height;
+        (*output_grid)->width=(*grid2)->width;
+
+        (*output_grid)->grid=(float**)malloc((*output_grid)->height*sizeof(float*));
+
+        unsigned int index_height, index_width;
+
+        for(index_height=0;index_height<(*output_grid)->height;index_height++){
+
+
+            float* row=(float*)malloc((*output_grid)->height*sizeof(float));
+
+            for(index_width=0;index_width<(*output_grid)->width;index_width++){
+
+
+                unsigned int index_forgotten;
+                float sum_forgotten=0.0;
+
+                for(index_forgotten=0;index_forgotten<(*grid1)->width;index_forgotten++){
+                    sum_forgotten+=(*grid1)->grid[index_height][index_forgotten]*((*grid2)->grid[index_forgotten][index_width]);
+
+
+                }
+
+                *(row+index_width)=sum_forgotten;
+
+            }
+            *((*output_grid)->grid+index_height)=row;
+
+            }
+        }
+
+}
+
+
+void grid_element_wise_mutiplication(Grid** output_grid, Grid** grid1, Grid** grid2){
+
+    if((*grid1)->height!=(*grid2)->height && (*grid1)->width!=(*grid2)->width){
+
+        ERROR_DIMENSION_GRID_MULT;
+        exit(0);
+
+    }
+    else{
+
+        *output_grid=(Grid*)malloc(sizeof(Grid));
+        (*output_grid)->height=(*grid1)->height;
+        (*output_grid)->width=(*grid1)->width;
+
+        (*output_grid)->grid=(float**)malloc((*output_grid)->height*sizeof(float*));
+
+        unsigned int index_height, index_width;
+
+        for(index_height=0;index_height<(*output_grid)->height;index_height++){
+
+
+            float* row=(float*)malloc((*output_grid)->height*sizeof(float));
+
+            for(index_width=0;index_width<(*output_grid)->width;index_width++){
+
+                *(row+index_width)=(*grid1)->grid[index_height][index_width]*((*grid2)->grid[index_height][index_width]);
+
+            }
+            *((*output_grid)->grid+index_height)=row;
+
+        }
+
+    }
+
+}
 
 void display_Block(Block* grid){
 
-   unsigned int dpth,row,col;
+    int dpth,row,col;
 
     for(dpth=0;dpth<grid->depth;dpth++){
         printf("Level : %d\n",dpth+1);
@@ -707,7 +815,7 @@ void display_Block(Block* grid){
 
 
 void display_Grid(Grid *table){
-   unsigned int row,col;
+    int row,col;
 
     for(row=0;row<table->height;row++){
         for(col=0;col<table->width;col++){
@@ -716,6 +824,7 @@ void display_Grid(Grid *table){
         printf("\n");
     }
 
+    printf("\n");
 
 }
 
@@ -763,6 +872,8 @@ int main()
 
     //Debugging the code
     debug_code();
+
+    printf("\nDONE :))) ! \n\n");
 
     return 0;
 }
