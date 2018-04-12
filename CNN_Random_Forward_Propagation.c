@@ -50,7 +50,7 @@ typedef struct{
 
     unsigned int previous_size;
     unsigned int current_size;
-    float* bias;
+    Grid* bias;
     Grid* weights;
     Grid* Before_Activation;
     Grid* After_Activation;
@@ -120,11 +120,12 @@ int test_for_grid_elementwise_multiplication(Grid* grid1, Grid* grid2){
 
 }
 
-int test_equal_grids_dimensions(Block* block1, Block* block2){
+int test_equal_blocks_dimensions(Block* block1, Block* block2){
 
-    return block1->depth==block2->depth || block1->width==block2->width ||\
+    return block1->depth==block2->depth && block1->width==block2->width &&\
                             block1->height==block2->height ;
 }
+
 
 
 void create_Grid(Grid** grid,unsigned int input_height,unsigned int input_width,char* choice){
@@ -191,6 +192,34 @@ Grid* transpose(Grid* grid_to_transpose){
     return transposed_grid;
 }
 
+Grid* add(Grid* grid1, Grid* grid2){
+
+    if(!test_equal_grids_dimensions(grid1,grid2)){
+
+        ERROR_DIMENSION_CONV;
+        exit(0);
+
+    }else
+    {
+
+        Grid* output=(Grid*)malloc(sizeof(Grid));
+        output->height=grid1->height;
+        output->width=grid1->width;
+        output->grid=grid1->grid;
+
+        unsigned int index_width, index_height;
+
+        for(index_height=0;index_height<output->height;index_height++){
+            for(index_width=0;index_width<output->width;index_width++){
+                output->grid[index_height][index_width]+=grid2->grid[index_height][index_width];
+            }
+        }
+
+        return output;
+
+    }
+}
+
 int test_for_grid_dot_multiplication(Grid* grid1, Grid* grid2){
 
     if(grid1->width==grid2->height){
@@ -213,6 +242,24 @@ int test_for_grid_dot_multiplication(Grid* grid1, Grid* grid2){
 
 }
 
+int test_equal_grids_dimensions(Grid* grid1, Grid* grid2){
+
+    if(grid1->width==grid2->width && grid2->height==grid2->height)
+    {
+        return 1;
+    }else
+    {
+    if(transpose(grid1)->width==grid2->width && transpose(grid1)->height==grid2->height){
+        printf("Perhaps you should transpose the first grid ..");
+    }
+
+    if(transpose(grid2)->width==grid1->width && transpose(grid2)->height==grid1->height){
+        printf("Perhaps you should transpose the second grid ..");
+    }
+
+    return 0;
+    }
+}
 
 
 void create_Block(Block** block,unsigned int input_depth,unsigned int input_height,unsigned int input_width,char* choice){
@@ -458,7 +505,7 @@ void AddPadding_Block(Block** block,int padding){
 float convolve_multiplication_sum(Block* block1, Block* block2){
    unsigned int depth,width,height;
 
-    if(!test_equal_grids_dimensions(block1,block2)){
+    if(!test_equal_blocks_dimensions(block1,block2)){
 
                 ERROR_DIMENSION_CONV;
                 exit(0);
@@ -916,22 +963,6 @@ void grid_element_wise_mutiplication(Grid** output_grid, Grid** grid1, Grid** gr
 
 }
 
-// Creating the Fully connected layers
-
-Grid copy_grid(Grid to_fill, Grid to_copy){
-
-    //*to_fill=(Grid*)malloc(sizeof(Grid));
-    printf("%x\n\n",&to_fill);
-    printf("%x\n\n",&to_copy);
-    to_fill.width=(to_copy).width;
-    to_fill.height=to_copy.height;
-    to_fill.grid=(to_copy).grid;
-
-
-    return to_fill;
-
-}
-
 
 void Fully_Connected_After_Flatten(FullyConnected** fc, Block** input, float (*activation)(float), int output_layer_size){
 
@@ -951,7 +982,8 @@ void Fully_Connected_After_Flatten(FullyConnected** fc, Block** input, float (*a
 
             unsigned int input_layer_size=(*input)->depth;
 
-            local_fc->bias=calloc(output_layer_size,sizeof(float));
+            local_fc->bias=(Grid*)malloc(sizeof(Grid*));
+            create_Grid(&local_fc->bias,output_layer_size,1,"zeros");
 
             Grid* weights_tmp;
             create_Grid(&weights_tmp,output_layer_size,input_layer_size,"random");
@@ -972,13 +1004,12 @@ void Fully_Connected_After_Flatten(FullyConnected** fc, Block** input, float (*a
 
             local_fc->Before_Activation=Z_i;
 
-            apply_function_to_Grid(&A_i,local_fc->activation);
+            Grid* A_i_plus_bias=add(A_i,local_fc->bias);
+            apply_function_to_Grid(&A_i_plus_bias,local_fc->activation);
 
-            local_fc->After_Activation=A_i;
+            local_fc->After_Activation=A_i_plus_bias;
             local_fc->previous_size=input_layer_size;
             local_fc->current_size=output_layer_size;
-
-            //Add bias
 
 
             }
@@ -986,12 +1017,32 @@ void Fully_Connected_After_Flatten(FullyConnected** fc, Block** input, float (*a
 
     else{
 
+            FullyConnected* local_fc=*fc;
 
-    // Treat the case where fc is not null: meaning that it is not the first time
+            free(local_fc->Before_Activation);
+            free(local_fc->After_Activation);
 
+            Grid* Z_i;
+            Grid* A_i;
+
+            Grid* input_grid;
+
+            extract_Grid_From_Flatten_Block(input,&input_grid);
+            Grid* transposed_input_grid=transpose(input_grid);
+
+            grid_dot_mutiplication(&Z_i,&local_fc->weights,&transposed_input_grid);
+            grid_dot_mutiplication(&A_i,&local_fc->weights,&transposed_input_grid);
+
+            local_fc->Before_Activation=Z_i;
+
+            Grid* A_i_plus_bias=add(A_i,local_fc->bias);
+            apply_function_to_Grid(&A_i_plus_bias,local_fc->activation);
+
+            local_fc->After_Activation=A_i_plus_bias;
 
     }
 }
+
 
 void display_Block(Block* grid){
 
