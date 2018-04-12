@@ -75,9 +75,9 @@ float relu(float x){
     return max(0,x);
 }
 
-//float sigmoid(float x){
-//   return 1./(1.+exp(-x));
-//}
+float sigmoid(float x){
+   return 1./(1.+exp(-x));
+}
 
 
 void shape_block(Block* block){
@@ -118,12 +118,12 @@ int test_for_grid_elementwise_multiplication(Grid* grid1, Grid* grid2){
 
 }
 
-int test_for_grid_dot_multiplication(Grid* grid1, Grid* grid2){
+int test_equal_grids_dimensions(Block* block1, Block* block2){
 
-    // Test with transpose  !
-
-    return grid1->height==grid2->width;
+    return block1->depth==block2->depth || block1->width==block2->width ||\
+                            block1->height==block2->height ;
 }
+
 
 void create_Grid(Grid** grid,unsigned int input_height,unsigned int input_width,char* choice){
 
@@ -169,8 +169,48 @@ void create_Grid(Grid** grid,unsigned int input_height,unsigned int input_width,
 
 Grid* transpose(Grid* grid_to_transpose){
 
+    Grid* transposed_grid=(Grid*)malloc(sizeof(Grid));
+    transposed_grid->height=grid_to_transpose->width;
+    transposed_grid->width=grid_to_transpose->height;
+
+    unsigned int index_heigth, index_width;
+    transposed_grid->grid=(float**)malloc(transposed_grid->height*sizeof(float*));
+
+    for(index_heigth=0;index_heigth<transposed_grid->height;index_heigth++){
+
+        float* row=(float*)malloc(transposed_grid->width*sizeof(float));
+        for(index_width=0;index_width<transposed_grid->width;index_width++){
+
+            *(row+index_width)=grid_to_transpose->grid[index_width][index_heigth];
+        }
+        *(transposed_grid->grid+index_heigth)=row;
+    }
+
+    return transposed_grid;
+}
+
+int test_for_grid_dot_multiplication(Grid* grid1, Grid* grid2){
+
+    if(grid1->height==grid2->width){
+        return 1;}
+
+        else{
+
+    if(transpose(grid1)->height==grid2->width){
+        printf("Perhaps you should transpose the first grid ..");
+    }
+    if(grid1->height==transpose(grid2)->width){
+        printf("Perhaps you should transpose the second grid ..");
+    }
+    if(transpose(grid1)->height==transpose(grid2)->width){
+        printf("Perhaps you should transpose the two grids ..");
+    }
+
+    return 0;
+    }
 
 }
+
 
 
 void create_Block(Block** block,unsigned int input_depth,unsigned int input_height,unsigned int input_width,char* choice){
@@ -220,7 +260,18 @@ void create_Blocks(Blocks **blocks,unsigned int length,unsigned int depth,unsign
     }
 }
 
+Grid* extract_grid_from_given_depth(Block** block, unsigned int index_depth){
 
+    Grid* current_depth=(Grid*)malloc(sizeof(Grid));
+
+    (current_depth)->height=(*block)->height;
+    (current_depth)->width=(*block)->width;
+    (current_depth)->grid=(*block)->matrix[index_depth];
+
+    return current_depth;
+
+
+}
 
 
 void apply_function_to_Grid(Grid** grid, float (*pointer_to_function)(float)){
@@ -237,6 +288,8 @@ void apply_function_to_Grid(Grid** grid, float (*pointer_to_function)(float)){
 
 }
 
+
+
 void apply_function_to_Block(Block** block, float (*pointer_to_function)(float)){
 
     int index_depth;
@@ -245,12 +298,7 @@ void apply_function_to_Block(Block** block, float (*pointer_to_function)(float))
 
     for(index_depth=0;index_depth<(*block)->depth;index_depth++){
 
-            Grid* current_depth=(Grid*)malloc(sizeof(Grid));
-
-            (current_depth)->height=height;
-            (current_depth)->width=width;
-            (current_depth)->grid=(*block)->matrix[index_depth];
-
+            Grid* current_depth=extract_grid_from_given_depth(block,index_depth);
 
             apply_function_to_Grid(&current_depth,pointer_to_function);
 
@@ -391,13 +439,7 @@ void AddPadding_Block(Block** block,int padding){
 
     for(counter_depth=0;counter_depth<output_Block->depth;counter_depth++){
 
-
-
-            Grid* padded_grid=(Grid*)malloc(sizeof(Grid));
-            padded_grid->height=(*block)->height;
-            padded_grid->width=(*block)->height;
-
-            padded_grid->grid=(*block)->matrix[counter_depth];
+            Grid* padded_grid=extract_grid_from_given_depth(block,counter_depth);
 
             *(output_Block->matrix+counter_depth)=AddPadding_Grid(&padded_grid,padding)->grid;
 
@@ -413,10 +455,10 @@ void AddPadding_Block(Block** block,int padding){
 float convolve_multiplication_sum(Block* block1, Block* block2){
    unsigned int depth,width,height;
 
-    if(block1->depth!=block2->depth || block1->depth!=block2->depth ||\
-                            block1->depth!=block2->depth){
-                                ERROR_DIMENSION_CONV;
-                                exit(0);
+    if(!test_equal_grids_dimensions(block1,block2)){
+
+                ERROR_DIMENSION_CONV;
+                exit(0);
                             }
     else{
         float output=0;
@@ -676,11 +718,7 @@ void Pooling(Block **input,unsigned int size_kernel,unsigned int stride,unsigned
    unsigned int index_output_depth;
     for(index_output_depth=0;index_output_depth<output->depth;index_output_depth++){
 
-        Grid* grid_from_current_block=(Grid*)malloc(sizeof(Grid));
-        grid_from_current_block->height=(*input)->height;
-        grid_from_current_block->width=(*input)->width;
-        grid_from_current_block->grid=(*input)->matrix[index_output_depth];
-
+        Grid* grid_from_current_block=extract_grid_from_given_depth(input,index_output_depth);
         Grid* pooled_grid=Pooling_On_Grid(grid_from_current_block,size_kernel,stride,padding,choice);
 
         *(output->matrix+index_output_depth)=pooled_grid->grid;
@@ -796,7 +834,7 @@ void Stack_Blocks(int nbr_arguments,... ){
 
 void grid_dot_mutiplication(Grid** output_grid, Grid** grid1, Grid** grid2){
 
-    if((*grid1)->height!=(*grid2)->width){
+    if(!test_for_grid_dot_multiplication(*grid1,*grid2)){
 
         ERROR_DIMENSION_GRID_MULT;
         exit(0);
