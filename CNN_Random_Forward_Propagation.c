@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <stdarg.h>
-
+#include <string.h>
 
 #define UPPER_BOUND .5
 #define GEN_RANDOM_SEED srand(time(NULL))
@@ -15,7 +15,7 @@
 #define ERROR_NULL printf("Cannot perform convolution: Please make sure both the kernel and the block are not null. \n")
 #define ERROR_CREATING_BLOCKS printf("Cannot create blocks : please make sure the length is > 1.\n")
 #define ERROR_EVEN_DIMENSIONS printf(" How about using a kernel with odd sizes :))) ! .. ")
-#define ERROR_DIMENSION_GRID_MULT printf("Please review the dimonsions of the grid you want to perform multiplication on.\n")
+#define ERROR_DIMENSION_GRID_MULT printf("Please review the dimensions of the grid you want to perform multiplication on.\n")
 #define ERROR_DIM_FLATTEN printf("Input must be flattened.\n")
 
 #define current_Layer(x) printf("\nCurrent Layer: %s\n",x)
@@ -48,6 +48,8 @@ typedef struct{
 
 typedef struct{
 
+    unsigned int previous_size;
+    unsigned int current_size;
     float* bias;
     Grid* weights;
     Grid* Before_Activation;
@@ -191,18 +193,18 @@ Grid* transpose(Grid* grid_to_transpose){
 
 int test_for_grid_dot_multiplication(Grid* grid1, Grid* grid2){
 
-    if(grid1->height==grid2->width){
+    if(grid1->width==grid2->height){
         return 1;}
 
         else{
 
-    if(transpose(grid1)->height==grid2->width){
+    if(transpose(grid1)->width==grid2->height){
         printf("Perhaps you should transpose the first grid ..");
     }
-    if(grid1->height==transpose(grid2)->width){
+    if(grid1->width==transpose(grid2)->height){
         printf("Perhaps you should transpose the second grid ..");
     }
-    if(transpose(grid1)->height==transpose(grid2)->width){
+    if(transpose(grid1)->width==transpose(grid2)->height){
         printf("Perhaps you should transpose the two grids ..");
     }
 
@@ -275,11 +277,12 @@ Grid* extract_grid_from_given_depth(Block** block, unsigned int index_depth){
 
 
 void apply_function_to_Grid(Grid** grid, float (*pointer_to_function)(float)){
+
     int index_width,index_height;
 
     for(index_height=0;index_height<(*grid)->height;index_height++){
         for(index_width=0;index_width<(*grid)->width;index_width++){
-                float* current_element=&((*grid)->grid[index_height][index_width]);
+                float *current_element=&((*grid)->grid[index_height][index_width]);
                 ((*grid)->grid[index_height][index_width])=(*pointer_to_function)(*current_element);
 
 
@@ -842,11 +845,14 @@ void grid_dot_mutiplication(Grid** output_grid, Grid** grid1, Grid** grid2){
     }
     else{
 
+
+
         *output_grid=(Grid*)malloc(sizeof(Grid));
         (*output_grid)->height=(*grid1)->height;
         (*output_grid)->width=(*grid2)->width;
 
         (*output_grid)->grid=(float**)malloc((*output_grid)->height*sizeof(float*));
+
 
         int index_height, index_width;
 
@@ -911,6 +917,22 @@ void grid_element_wise_mutiplication(Grid** output_grid, Grid** grid1, Grid** gr
 }
 
 // Creating the Fully connected layers
+
+Grid copy_grid(Grid to_fill, Grid to_copy){
+
+    //*to_fill=(Grid*)malloc(sizeof(Grid));
+    printf("%x\n\n",&to_fill);
+    printf("%x\n\n",&to_copy);
+    to_fill.width=(to_copy).width;
+    to_fill.height=to_copy.height;
+    to_fill.grid=(to_copy).grid;
+
+
+    return to_fill;
+
+}
+
+
 void Fully_Connected_After_Flatten(FullyConnected** fc, Block** input, float (*activation)(float), int output_layer_size){
 
     if(!*fc){
@@ -921,13 +943,13 @@ void Fully_Connected_After_Flatten(FullyConnected** fc, Block** input, float (*a
             exit(0);
 
         }else
-        // We suppose that the fully connected layer is created for the first time
+
         {
 
+            *fc=(FullyConnected*)malloc(sizeof(FullyConnected));;
             FullyConnected* local_fc=*fc;
-            local_fc=(FullyConnected*)malloc(sizeof(FullyConnected));
 
-            int input_layer_size=(*input)->depth;
+            unsigned int input_layer_size=(*input)->depth;
 
             local_fc->bias=calloc(output_layer_size,sizeof(float));
 
@@ -935,23 +957,29 @@ void Fully_Connected_After_Flatten(FullyConnected** fc, Block** input, float (*a
             create_Grid(&weights_tmp,output_layer_size,input_layer_size,"random");
 
             local_fc->weights=weights_tmp;
-            local_fc->activation=activation;
+            local_fc->activation=*activation;
 
+            Grid* Z_i;
+            Grid* A_i;
 
-            Grid* Zi;
             Grid* input_grid;
 
             extract_Grid_From_Flatten_Block(input,&input_grid);
+            Grid* transposed_input_grid=transpose(input_grid);
 
-            // --> multiply input_grid & local_fc->weights
+            grid_dot_mutiplication(&Z_i,&local_fc->weights,&transposed_input_grid);
+            grid_dot_mutiplication(&A_i,&local_fc->weights,&transposed_input_grid);
 
-            //grid_dot_mutiplication(&Zi,&weights_tmp,&);
+            local_fc->Before_Activation=Z_i;
 
-            /*
-            determine the zi before activations
-            determine the a_i after activations
+            apply_function_to_Grid(&A_i,local_fc->activation);
 
-            */
+            local_fc->After_Activation=A_i;
+            local_fc->previous_size=input_layer_size;
+            local_fc->current_size=output_layer_size;
+
+            //Add bias
+
 
             }
         }
@@ -1032,18 +1060,21 @@ void debug_code(){
     shape_block(input);
 
     FullyConnected* fc=NULL;
-    //Fully_Connected_After_Flatten(&fc,&input,&relu,120);
+    Fully_Connected_After_Flatten(&fc,&input,&sigmoid,20);
 
     //Display Input
 
 }
 
-
+void print(int a){
+    printf("\n%d\n",a);
+}
 int main()
 {
 
     //Debugging the code
     debug_code();
+
 
     printf("\nDONE :))) ! \n\n");
 
