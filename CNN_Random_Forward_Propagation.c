@@ -7,12 +7,12 @@
 #include <stdarg.h>
 #include <string.h>
 
-#define UPPER_BOUND .5
+#define UPPER_BOUND .05
 #define GEN_RANDOM_SEED srand(time(NULL))
 #define DEBUG printf("debug !")
 #define ERROR_DIMENSION_CONV printf("Dimension conflict: Please review the dimensions of the convolved arrays! \n")
 #define ERROR_DEPTH printf("Cannot perform convolution: Please make sure the kernel and the block have the same depth. \n")
-#define ERROR_NULL printf("Cannot perform convolution: Please make sure both the kernel and the block are not null. \n")
+#define ERROR_NULL printf("Null input. \n")
 #define ERROR_CREATING_BLOCKS printf("Cannot create blocks : please make sure the length is > 1.\n")
 #define ERROR_EVEN_DIMENSIONS printf(" How about using a kernel with odd sizes :))) ! .. ")
 #define ERROR_DIMENSION_GRID_MULT printf("Please review the dimensions of the grid you want to perform multiplication on.\n")
@@ -63,12 +63,12 @@ float generate_random(){
 
 }
 
-int control_parity_kernel_size(int size_kernel){
+unsigned int control_parity_kernel_size(int size_kernel){
     return size_kernel%2==1;
 }
 
 
-int determine_size_output(int input_height,unsigned int kernel_height,unsigned int padding,unsigned int stride){
+unsigned int determine_size_output(int input_height,unsigned int kernel_height,unsigned int padding,unsigned int stride){
 
      return (int)(((input_height-kernel_height+2*padding)/stride))+1;
 }
@@ -92,41 +92,52 @@ void shape_block(Block* block){
 
 void shape_grid(Grid* grid){
 
-    printf("\nheight : %d \n",grid->height);
+    printf("height : %d \n",grid->height);
     printf("width : %d \n",grid->width);
 
 }
 
 
-int test_block_null_dimension(Block* block){
+unsigned int test_block_null_dimension(Block* block){
 
     return block->height && block->width && block->depth;
 }
 
-int test_grid_null_dimension(Grid* grid){
+unsigned int test_grid_null_dimension(Grid* grid){
 
     return grid->height && grid->width ;
 }
 
 
-int test_block_for_fully_connected(Block* block){
+unsigned int test_block_for_fully_connected(Block* block){
 
     return block->width==1 && block->height==1 ;
 }
 
-int test_for_grid_elementwise_multiplication(Grid* grid1, Grid* grid2){
+unsigned int test_for_grid_elementwise_multiplication(Grid* grid1, Grid* grid2){
 
     return grid1->height==grid2->height && grid1->width==grid2->width ;
 
 }
 
-int test_equal_blocks_dimensions(Block* block1, Block* block2){
+unsigned int test_equal_blocks_dimensions(Block* block1, Block* block2){
 
     return block1->depth==block2->depth && block1->width==block2->width &&\
                             block1->height==block2->height ;
 }
 
+unsigned int test_if_fully_connected_is_null(FullyConnected* fc){
 
+    return fc->After_Activation!=NULL && fc->Before_Activation!=NULL;
+
+}
+
+
+
+FullyConnected* initialize_Fully_Connected(size_t size_allocation){
+
+    return malloc(size_allocation*sizeof(FullyConnected));
+}
 
 void create_Grid(Grid** grid,unsigned int input_height,unsigned int input_width,char* choice){
 
@@ -966,7 +977,9 @@ void grid_element_wise_mutiplication(Grid** output_grid, Grid** grid1, Grid** gr
 
 void Fully_Connected_After_Flatten(FullyConnected** fc, Block** input, float (*activation)(float), int output_layer_size){
 
-    if(!*fc){
+
+    current_Layer("Fully Connected");
+    if(!test_if_fully_connected_is_null(*fc)){
 
         if(!test_block_for_fully_connected(*input)){
 
@@ -1011,6 +1024,8 @@ void Fully_Connected_After_Flatten(FullyConnected** fc, Block** input, float (*a
             local_fc->previous_size=input_layer_size;
             local_fc->current_size=output_layer_size;
 
+            shape_grid(local_fc->After_Activation);
+
 
             }
         }
@@ -1040,7 +1055,90 @@ void Fully_Connected_After_Flatten(FullyConnected** fc, Block** input, float (*a
 
             local_fc->After_Activation=A_i_plus_bias;
 
+            shape_grid(local_fc->After_Activation);
+
     }
+}
+
+void Fully_Connected(FullyConnected** fc, FullyConnected** fc_input,float (*activation)(float), int output_layer_size){
+
+    current_Layer("Fully Connected");
+
+    if(!test_if_fully_connected_is_null(*fc)){
+
+        //test if a FullyConnected block is null
+        if(!test_if_fully_connected_is_null(*fc_input)){
+
+            printf("First");
+
+            ERROR_NULL ;
+            exit(0);
+
+        }else
+
+        {
+
+            *fc=(FullyConnected*)malloc(sizeof(FullyConnected));
+            FullyConnected* local_fc=*fc;
+
+            unsigned int input_layer_size=(*fc_input)->current_size;
+
+            local_fc->bias=(Grid*)malloc(sizeof(Grid*));
+            create_Grid(&local_fc->bias,output_layer_size,1,"zeros");
+
+            Grid* weights_tmp;
+            create_Grid(&weights_tmp,output_layer_size,input_layer_size,"random");
+
+            local_fc->weights=weights_tmp;
+            local_fc->activation=*activation;
+
+            Grid* Z_i;
+            Grid* A_i;
+
+            grid_dot_mutiplication(&Z_i,&local_fc->weights,&(*fc_input)->After_Activation);
+            grid_dot_mutiplication(&A_i,&local_fc->weights,&(*fc_input)->After_Activation);
+
+            local_fc->Before_Activation=Z_i;
+
+            Grid* A_i_plus_bias=add(A_i,local_fc->bias);
+            apply_function_to_Grid(&A_i_plus_bias,local_fc->activation);
+
+            local_fc->After_Activation=A_i_plus_bias;
+            local_fc->previous_size=input_layer_size;
+            local_fc->current_size=output_layer_size;
+
+            shape_grid(local_fc->After_Activation);
+
+        }
+
+    }
+    else{
+            printf("Second");
+
+
+            FullyConnected* local_fc=*fc;
+
+            unsigned int input_layer_size=(*fc_input)->current_size;
+
+            Grid* Z_i;
+            Grid* A_i;
+
+            grid_dot_mutiplication(&Z_i,&local_fc->weights,&(*fc_input)->After_Activation);
+            grid_dot_mutiplication(&A_i,&local_fc->weights,&(*fc_input)->After_Activation);
+
+            local_fc->Before_Activation=Z_i;
+
+            Grid* A_i_plus_bias=add(A_i,local_fc->bias);
+            apply_function_to_Grid(&A_i_plus_bias,local_fc->activation);
+
+            local_fc->After_Activation=A_i_plus_bias;
+            local_fc->previous_size=input_layer_size;
+            local_fc->current_size=output_layer_size;
+
+            shape_grid(local_fc->After_Activation);
+
+    }
+
 }
 
 
@@ -1110,10 +1208,13 @@ void debug_code(){
     Flatten(&input);
     shape_block(input);
 
-    FullyConnected* fc=NULL;
-    Fully_Connected_After_Flatten(&fc,&input,&sigmoid,20);
+    FullyConnected* fc=initialize_Fully_Connected(1);
+    Fully_Connected_After_Flatten(&fc,&input,&relu,20);
 
-    //Display Input
+    FullyConnected* fc0=initialize_Fully_Connected(1);
+    Fully_Connected(&fc0,&fc,&relu,10);
+
+    //create a softmax activation layer;
 
 }
 
