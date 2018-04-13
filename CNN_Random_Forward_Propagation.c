@@ -86,14 +86,14 @@ void shape_block(Block* block){
 
     printf("depth : %d \n",block->depth);
     printf("height : %d \n",block->height);
-    printf("width : %d \n",block->width);
+    printf("width : %d \n\n",block->width);
 
 }
 
 void shape_grid(Grid* grid){
 
     printf("height : %d \n",grid->height);
-    printf("width : %d \n",grid->width);
+    printf("width : %d \n\n",grid->width);
 
 }
 
@@ -977,8 +977,15 @@ void grid_element_wise_mutiplication(Grid** output_grid, Grid** grid1, Grid** gr
 
 void Fully_Connected_After_Flatten(FullyConnected** fc, Block** input, float (*activation)(float), int output_layer_size){
 
-
     current_Layer("Fully Connected");
+
+    unsigned int input_layer_size=(*input)->depth;
+
+    Grid* weights_tmp;
+    Grid* Z_i;
+    Grid* A_i;
+    Grid* input_grid;
+
     if(!test_if_fully_connected_is_null(*fc)){
 
         if(!test_block_for_fully_connected(*input)){
@@ -993,7 +1000,6 @@ void Fully_Connected_After_Flatten(FullyConnected** fc, Block** input, float (*a
             *fc=(FullyConnected*)malloc(sizeof(FullyConnected));;
             FullyConnected* local_fc=*fc;
 
-            unsigned int input_layer_size=(*input)->depth;
 
             local_fc->bias=(Grid*)malloc(sizeof(Grid*));
             create_Grid(&local_fc->bias,output_layer_size,1,"zeros");
@@ -1004,10 +1010,7 @@ void Fully_Connected_After_Flatten(FullyConnected** fc, Block** input, float (*a
             local_fc->weights=weights_tmp;
             local_fc->activation=*activation;
 
-            Grid* Z_i;
-            Grid* A_i;
 
-            Grid* input_grid;
 
             extract_Grid_From_Flatten_Block(input,&input_grid);
             Grid* transposed_input_grid=transpose(input_grid);
@@ -1037,11 +1040,6 @@ void Fully_Connected_After_Flatten(FullyConnected** fc, Block** input, float (*a
             free(local_fc->Before_Activation);
             free(local_fc->After_Activation);
 
-            Grid* Z_i;
-            Grid* A_i;
-
-            Grid* input_grid;
-
             extract_Grid_From_Flatten_Block(input,&input_grid);
             Grid* transposed_input_grid=transpose(input_grid);
 
@@ -1064,12 +1062,15 @@ void Fully_Connected(FullyConnected** fc, FullyConnected** fc_input,float (*acti
 
     current_Layer("Fully Connected");
 
+    unsigned int input_layer_size=(*fc_input)->current_size;
+    Grid* weights_tmp;
+    Grid* Z_i;
+    Grid* A_i;
+
     if(!test_if_fully_connected_is_null(*fc)){
 
         //test if a FullyConnected block is null
         if(!test_if_fully_connected_is_null(*fc_input)){
-
-            printf("First");
 
             ERROR_NULL ;
             exit(0);
@@ -1081,19 +1082,15 @@ void Fully_Connected(FullyConnected** fc, FullyConnected** fc_input,float (*acti
             *fc=(FullyConnected*)malloc(sizeof(FullyConnected));
             FullyConnected* local_fc=*fc;
 
-            unsigned int input_layer_size=(*fc_input)->current_size;
 
             local_fc->bias=(Grid*)malloc(sizeof(Grid*));
             create_Grid(&local_fc->bias,output_layer_size,1,"zeros");
 
-            Grid* weights_tmp;
+
             create_Grid(&weights_tmp,output_layer_size,input_layer_size,"random");
 
             local_fc->weights=weights_tmp;
             local_fc->activation=*activation;
-
-            Grid* Z_i;
-            Grid* A_i;
 
             grid_dot_mutiplication(&Z_i,&local_fc->weights,&(*fc_input)->After_Activation);
             grid_dot_mutiplication(&A_i,&local_fc->weights,&(*fc_input)->After_Activation);
@@ -1113,15 +1110,8 @@ void Fully_Connected(FullyConnected** fc, FullyConnected** fc_input,float (*acti
 
     }
     else{
-            printf("Second");
-
 
             FullyConnected* local_fc=*fc;
-
-            unsigned int input_layer_size=(*fc_input)->current_size;
-
-            Grid* Z_i;
-            Grid* A_i;
 
             grid_dot_mutiplication(&Z_i,&local_fc->weights,&(*fc_input)->After_Activation);
             grid_dot_mutiplication(&A_i,&local_fc->weights,&(*fc_input)->After_Activation);
@@ -1138,6 +1128,13 @@ void Fully_Connected(FullyConnected** fc, FullyConnected** fc_input,float (*acti
             shape_grid(local_fc->After_Activation);
 
     }
+
+}
+
+
+void Final_Activation(FullyConnected** fc ,float (*activation)(float)){
+
+    //
 
 }
 
@@ -1214,7 +1211,12 @@ void debug_code(){
     FullyConnected* fc0=initialize_Fully_Connected(1);
     Fully_Connected(&fc0,&fc,&relu,10);
 
+    display_Grid(fc0->After_Activation);
+
+    // make a function that resumes what is found in the fully_connected layer
     //create a softmax activation layer;
+
+    //Display Input
 
 }
 
