@@ -7,7 +7,7 @@
 #include <stdarg.h>
 #include <string.h>
 
-#define UPPER_BOUND .05
+#define UPPER_BOUND .0005
 #define GEN_RANDOM_SEED srand(time(NULL))
 #define DEBUG printf("debug !")
 #define ERROR_DIMENSION_CONV printf("Dimension conflict: Please review the dimensions of the convolved arrays! \n")
@@ -21,6 +21,9 @@
 #define current_Layer(x) printf("\nCurrent Layer: %s\n",x)
 #define max(X, Y)  ((X) > (Y) ? (X) : (Y))
 #define min(X, Y)  ((X) < (Y) ? (X) : (Y))
+
+//#define add__(a,b) ({retun a+b;})
+//#define substract__(a,b) ({retun a-b;})
 
 //2D output
 //After single convolution
@@ -46,6 +49,8 @@ typedef struct{
     Block** blocks;
 }Blocks;
 
+
+
 typedef struct{
 
     unsigned int previous_size;
@@ -57,6 +62,23 @@ typedef struct{
     float (*activation)(float);
 
 }FullyConnected;
+
+
+float add__(float a, float b){
+    return a+b;
+}
+
+float substract__(float a, float b){
+    return a-b;
+}
+
+typedef struct{
+    float (*add)(float,float);
+    float (*substract)(float,float);
+}Operator;
+
+static Operator Op ={add:add__,substract:substract__};
+
 
 float generate_random(){
     return ((float)rand())/((float)RAND_MAX) * UPPER_BOUND;
@@ -133,11 +155,16 @@ unsigned int test_if_fully_connected_is_null(FullyConnected* fc){
 }
 
 
-
 FullyConnected* initialize_Fully_Connected(size_t size_allocation){
 
     return malloc(size_allocation*sizeof(FullyConnected));
 }
+
+Grid* initialize_Grid(size_t size_allocation){
+
+    return malloc(size_allocation*sizeof(Grid));
+}
+
 
 void create_Grid(Grid** grid,unsigned int input_height,unsigned int input_width,char* choice){
 
@@ -203,7 +230,38 @@ Grid* transpose(Grid* grid_to_transpose){
     return transposed_grid;
 }
 
-Grid* add(Grid* grid1, Grid* grid2){
+float Sum_Grid(Grid* grid){
+
+    float output=0.0;
+    unsigned int index_width, index_height;
+
+   for(index_height=0;index_height<grid->height;index_height++){
+            for(index_width=0;index_width<grid->width;index_width++){
+
+                output+=grid->grid[index_height][index_width];
+
+            }
+   }
+
+   return output;
+
+}
+
+void multiply_by_digit(Grid** grid, float digit){
+
+    unsigned int index_width, index_height;
+
+   for(index_height=0;index_height<(*grid)->height;index_height++){
+            for(index_width=0;index_width<(*grid)->width;index_width++){
+
+                (*grid)->grid[index_height][index_width]*=digit;
+
+            }
+   }
+
+}
+
+Grid* Operate(Grid* grid1, Grid* grid2, char* choice){
 
     if(!test_equal_grids_dimensions(grid1,grid2)){
 
@@ -222,7 +280,21 @@ Grid* add(Grid* grid1, Grid* grid2){
 
         for(index_height=0;index_height<output->height;index_height++){
             for(index_width=0;index_width<output->width;index_width++){
-                output->grid[index_height][index_width]+=grid2->grid[index_height][index_width];
+
+                if(choice=="+")
+                {
+                output->grid[index_height][index_width]=Op.add(output->grid[index_height][index_width],\
+                                                               grid2->grid[index_height][index_width]);
+                }
+                else
+                if(choice=="-")
+                {
+                output->grid[index_height][index_width]=Op.substract(output->grid[index_height][index_width],\
+                                                                grid2->grid[index_height][index_width]);
+                }
+                else{
+                    printf("Wrong operator choice :((( .. ");
+                }
             }
         }
 
@@ -230,6 +302,36 @@ Grid* add(Grid* grid1, Grid* grid2){
 
     }
 }
+
+
+Grid* substract(Grid* grid1, Grid* grid2){
+
+    if(!test_equal_grids_dimensions(grid1,grid2)){
+
+        ERROR_DIMENSION_CONV;
+        exit(0);
+
+    }else
+    {
+
+        Grid* output=(Grid*)malloc(sizeof(Grid));
+        output->height=grid1->height;
+        output->width=grid1->width;
+        output->grid=grid1->grid;
+
+        unsigned int index_width, index_height;
+
+        for(index_height=0;index_height<output->height;index_height++){
+            for(index_width=0;index_width<output->width;index_width++){
+                output->grid[index_height][index_width]-=grid2->grid[index_height][index_width];
+            }
+        }
+
+        return output;
+
+    }
+}
+
 
 int test_for_grid_dot_multiplication(Grid* grid1, Grid* grid2){
 
@@ -342,6 +444,22 @@ void apply_function_to_Grid(Grid** grid, float (*pointer_to_function)(float)){
         for(index_width=0;index_width<(*grid)->width;index_width++){
                 float *current_element=&((*grid)->grid[index_height][index_width]);
                 ((*grid)->grid[index_height][index_width])=(*pointer_to_function)(*current_element);
+
+
+        }
+    }
+
+}
+
+void apply_function_to_Grid_type_2(Grid** grid, float (*pointer_to_function)(float,Grid*)){
+
+    int index_width,index_height;
+
+    for(index_height=0;index_height<(*grid)->height;index_height++){
+        for(index_width=0;index_width<(*grid)->width;index_width++){
+                float *current_element=&((*grid)->grid[index_height][index_width]);
+                ((*grid)->grid[index_height][index_width])=(*pointer_to_function)(*current_element,*grid);
+                printf(" lol %.3f \n",(*pointer_to_function)(*current_element,*grid));
 
 
         }
@@ -844,7 +962,9 @@ void Flatten(Block **input){
    unsigned int counter_array_flattened=0;
 
     for(index_depth=0;index_depth<(*input)->depth;index_depth++){
+
             for(index_height=0;index_height<(*input)->height;index_height++){
+
                 for(index_width=0;index_width<(*input)->width;index_width++){
 
                     float** decrease_height=(float**)malloc(sizeof(float*));
@@ -1020,7 +1140,7 @@ void Fully_Connected_After_Flatten(FullyConnected** fc, Block** input, float (*a
 
             local_fc->Before_Activation=Z_i;
 
-            Grid* A_i_plus_bias=add(A_i,local_fc->bias);
+            Grid* A_i_plus_bias=Operate(A_i,local_fc->bias,"+");
             apply_function_to_Grid(&A_i_plus_bias,local_fc->activation);
 
             local_fc->After_Activation=A_i_plus_bias;
@@ -1048,7 +1168,7 @@ void Fully_Connected_After_Flatten(FullyConnected** fc, Block** input, float (*a
 
             local_fc->Before_Activation=Z_i;
 
-            Grid* A_i_plus_bias=add(A_i,local_fc->bias);
+            Grid* A_i_plus_bias=Operate(A_i,local_fc->bias,"+");
             apply_function_to_Grid(&A_i_plus_bias,local_fc->activation);
 
             local_fc->After_Activation=A_i_plus_bias;
@@ -1097,7 +1217,7 @@ void Fully_Connected(FullyConnected** fc, FullyConnected** fc_input,float (*acti
 
             local_fc->Before_Activation=Z_i;
 
-            Grid* A_i_plus_bias=add(A_i,local_fc->bias);
+            Grid* A_i_plus_bias=Operate(A_i,local_fc->bias,"+");
             apply_function_to_Grid(&A_i_plus_bias,local_fc->activation);
 
             local_fc->After_Activation=A_i_plus_bias;
@@ -1118,7 +1238,7 @@ void Fully_Connected(FullyConnected** fc, FullyConnected** fc_input,float (*acti
 
             local_fc->Before_Activation=Z_i;
 
-            Grid* A_i_plus_bias=add(A_i,local_fc->bias);
+            Grid* A_i_plus_bias=Operate(A_i,local_fc->bias,"+");
             apply_function_to_Grid(&A_i_plus_bias,local_fc->activation);
 
             local_fc->After_Activation=A_i_plus_bias;
@@ -1131,10 +1251,23 @@ void Fully_Connected(FullyConnected** fc, FullyConnected** fc_input,float (*acti
 
 }
 
+float component_softmax(float element, Grid* grid){
 
-void Final_Activation(FullyConnected** fc ,float (*activation)(float)){
+    Grid* grid_to_exponential=initialize_Grid(1);
+    apply_function_to_Grid(&grid_to_exponential,&exp);
 
-    //
+
+    display_Grid(grid_to_exponential);
+
+    return exp(element)/Sum_Grid(grid_to_exponential);
+
+}
+
+
+void Softmax_Activation(Grid* fc_output ,FullyConnected** fc){
+
+    fc_output=(*fc)->After_Activation;
+    apply_function_to_Grid_type_2(&fc_output,&component_softmax);
 
 }
 
@@ -1175,6 +1308,8 @@ void debug_code(){
 
     //Creating random input
 
+
+
     Block* input;
     create_Block(&input,5,10,10,"random");
 
@@ -1201,6 +1336,7 @@ void debug_code(){
     Pooling(&input,5,1,0,"max");
     shape_block(input);
 
+    display_Block(input);
 
     Flatten(&input);
     shape_block(input);
@@ -1211,18 +1347,15 @@ void debug_code(){
     FullyConnected* fc0=initialize_Fully_Connected(1);
     Fully_Connected(&fc0,&fc,&relu,10);
 
-    display_Grid(fc0->After_Activation);
+    Grid* fc1=initialize_Grid(1);
+    Softmax_Activation(fc1,&fc0);
 
-    // make a function that resumes what is found in the fully_connected layer
-    //create a softmax activation layer;
+    display_Grid(fc1);
 
-    //Display Input
 
 }
 
-void print(int a){
-    printf("\n%d\n",a);
-}
+
 int main()
 {
 
