@@ -6,8 +6,12 @@
 #include <math.h>
 #include <stdarg.h>
 #include <string.h>
+#include <unistd.h>
+//#include <windows.h>
+#include <ctype.h>
 
-#define UPPER_BOUND .05
+
+#define UPPER_BOUND .005
 #define GEN_RANDOM_SEED srand(time(NULL))
 #define DEBUG printf("debug !")
 #define ERROR_DIMENSION_CONV printf("Dimension conflict: Please review the dimensions of the convolved arrays! \n")
@@ -265,6 +269,28 @@ void multiply_by_digit(Grid** grid, double digit){
    }
 
 }
+
+Grid* deep_copy(Grid* grid){
+
+    Grid* aux=initialize_Grid(1);
+    aux->height=grid->height;
+    aux->width=grid->width;
+    aux->grid=(double**)malloc(aux->height*sizeof(double*));
+
+    unsigned int row,col;
+
+    for(row=0;row<aux->height;row++){
+        double *row_ptr=(double*)malloc(aux->width*sizeof(double));
+        for(col=0;col<aux->width;col++){
+            *(row_ptr+col)=grid->grid[row][col];
+            }
+        *(aux->grid+row)=row_ptr;
+    }
+
+    return aux;
+
+}
+
 
 Grid* Operate(Grid* grid1, Grid* grid2, char* choice){
 
@@ -1277,11 +1303,11 @@ void debug_code(){
 
 
     Block* input;
-    create_Block(&input,5,10,10,"random");
+    create_Block(&input,50,100,100,"random");
 
     //Creating random kernels
     Blocks* kernels;
-    create_Blocks(&kernels,5,5,3,3,"random");
+    create_Blocks(&kernels,50,50,3,3,"random");
 
     //Covolution Layer
     Convolution(&input,kernels,1,1);
@@ -1292,7 +1318,7 @@ void debug_code(){
     shape_block(input);
 
     Blocks* kernels_bis;
-    create_Blocks(&kernels_bis,15,5,5,5,"random");
+    create_Blocks(&kernels_bis,50,50,5,5,"random");
 
     //Covolution Layer
     Convolution(&input,kernels_bis,1,2);
@@ -1302,22 +1328,19 @@ void debug_code(){
     Pooling(&input,5,1,0,"max");
     shape_block(input);
 
-    display_Block(input);
-
     Flatten(&input);
     shape_block(input);
 
-
     FullyConnected* fc=initialize_Fully_Connected(1);
-    Fully_Connected_After_Flatten(&fc,&input,&relu,30);
+    Fully_Connected_After_Flatten(&fc,&input,&relu,15);
 
     FullyConnected* fc0=initialize_Fully_Connected(1);
-    Fully_Connected(&fc0,&fc,&relu,20);
+    Fully_Connected(&fc0,&fc,&relu,10);
 
-    Grid* fc1=initialize_Grid(1);
-    Softmax_Activation(&fc1,&fc0);
+    Grid* fc_activated=initialize_Grid(1);
+    Softmax_Activation(&fc_activated,&fc0);
 
-    display_Grid(fc1);
+    printf("%.10f",Sum_Grid(fc_activated));
 
 }
 
@@ -1327,7 +1350,6 @@ int main()
 
     //Debugging the code
     debug_code();
-
 
     printf("\nDONE :))) ! \n\n");
 
