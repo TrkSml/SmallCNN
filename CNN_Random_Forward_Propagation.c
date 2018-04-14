@@ -82,7 +82,7 @@ typedef struct{
     double (*substract)(double,double);
 }Operator;
 
-static Operator Op ={add:add__,substract:substract__};
+Operator Op ={add:add__,substract:substract__};
 
 
 double generate_random(){
