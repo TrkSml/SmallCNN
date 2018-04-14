@@ -11,7 +11,7 @@
 #include <ctype.h>
 
 
-#define UPPER_BOUND .005
+#define UPPER_BOUND .0005
 #define GEN_RANDOM_SEED srand(time(NULL))
 #define DEBUG printf("debug !")
 #define ERROR_DIMENSION_CONV printf("Dimension conflict: Please review the dimensions of the convolved arrays! \n")
@@ -25,6 +25,7 @@
 #define current_Layer(x) printf("\nCurrent Layer: %s\n",x)
 #define max(X, Y)  ((X) > (Y) ? (X) : (Y))
 #define min(X, Y)  ((X) < (Y) ? (X) : (Y))
+#define write(x) printf("%s",x)
 
 //#define add__(a,b) ({retun a+b;})
 //#define substract__(a,b) ({retun a-b;})
@@ -159,10 +160,43 @@ unsigned int test_if_fully_connected_is_null(FullyConnected* fc){
 }
 
 
+double*** initialize_triple_pointer_double(size_t size_allocation){
+
+    return malloc(size_allocation*sizeof(double**));
+}
+
+
+double** initialize_double_pointer_double(size_t size_allocation){
+
+    return malloc(size_allocation*sizeof(double*));
+}
+
+
+double* initialize_pointer_double(size_t size_allocation){
+    return malloc(size_allocation*sizeof(double));
+}
+
+
+FullyConnected** initialize_pointer_Fully_Connected(size_t size_allocation){
+
+    return malloc(size_allocation*sizeof(FullyConnected*));
+}
+
 FullyConnected* initialize_Fully_Connected(size_t size_allocation){
 
     return malloc(size_allocation*sizeof(FullyConnected));
 }
+
+Block* initialize_Block(size_t size_allocation){
+
+    return malloc(size_allocation*sizeof(Block));
+}
+
+Block** initialize_pointer_Block(size_t size_allocation){
+
+    return malloc(size_allocation*sizeof(Block*));
+}
+
 
 Grid* initialize_Grid(size_t size_allocation){
 
@@ -270,12 +304,12 @@ void multiply_by_digit(Grid** grid, double digit){
 
 }
 
-Grid* deep_copy(Grid* grid){
+Grid* deep_grid_copy(Grid* grid){
 
     Grid* aux=initialize_Grid(1);
     aux->height=grid->height;
     aux->width=grid->width;
-    aux->grid=(double**)malloc(aux->height*sizeof(double*));
+    aux->grid=initialize_double_pointer_double(aux->height);
 
     unsigned int row,col;
 
@@ -290,6 +324,8 @@ Grid* deep_copy(Grid* grid){
     return aux;
 
 }
+
+
 
 
 Grid* Operate(Grid* grid1, Grid* grid2, char* choice){
@@ -436,6 +472,34 @@ Grid* extract_grid_from_given_depth(Block** block, unsigned int index_depth){
 
 
 }
+
+
+Block* deep_block_copy(Block* block){
+
+    Block* aux=initialize_Block(1);
+
+    aux->height=block->height;
+    aux->width=block->width;
+    aux->depth=block->depth;
+
+    aux->matrix=initialize_triple_pointer_double(aux->depth);
+
+    unsigned depth;
+
+    for(depth=0;depth<aux->depth;depth++){
+
+            Grid* current_grid=extract_grid_from_given_depth(&block,depth);
+            *(aux->matrix+depth)=current_grid->grid;
+
+            free(current_grid);
+
+
+    }
+
+    return aux;
+
+}
+
 
 
 void apply_function_to_Grid(Grid** grid, double (*pointer_to_function)(double)){
@@ -1272,7 +1336,7 @@ void display_Block(Block* grid){
         printf("Level : %d\n",dpth+1);
         for(row=0;row<grid->height;row++){
             for(col=0;col<grid->width;col++){
-                printf("%.2f |", grid->matrix[dpth][row][col]);
+                printf("%.10lf |", grid->matrix[dpth][row][col]);
             }
             printf("\n");
         }
@@ -1287,7 +1351,7 @@ void display_Grid(Grid *table){
 
     for(row=0;row<table->height;row++){
         for(col=0;col<table->width;col++){
-            printf("%.10f |", table->grid[row][col]);
+            printf("%.10lf |", table->grid[row][col]);
             }
         printf("\n");
     }
@@ -1303,11 +1367,11 @@ void debug_code(){
 
 
     Block* input;
-    create_Block(&input,50,100,100,"random");
+    create_Block(&input,3,200,200,"random");
 
     //Creating random kernels
     Blocks* kernels;
-    create_Blocks(&kernels,50,50,3,3,"random");
+    create_Blocks(&kernels,10,3,3,3,"random");
 
     //Covolution Layer
     Convolution(&input,kernels,1,1);
@@ -1318,7 +1382,7 @@ void debug_code(){
     shape_block(input);
 
     Blocks* kernels_bis;
-    create_Blocks(&kernels_bis,50,50,5,5,"random");
+    create_Blocks(&kernels_bis,40,10,5,5,"random");
 
     //Covolution Layer
     Convolution(&input,kernels_bis,1,2);
@@ -1332,15 +1396,20 @@ void debug_code(){
     shape_block(input);
 
     FullyConnected* fc=initialize_Fully_Connected(1);
-    Fully_Connected_After_Flatten(&fc,&input,&relu,15);
+    Fully_Connected_After_Flatten(&fc,&input,&relu,50);
+
+    FullyConnected* fcb=initialize_Fully_Connected(1);
+    Fully_Connected(&fcb,&fc,&relu,25);
 
     FullyConnected* fc0=initialize_Fully_Connected(1);
-    Fully_Connected(&fc0,&fc,&relu,10);
+    Fully_Connected(&fc0,&fc,&relu,20);
 
     Grid* fc_activated=initialize_Grid(1);
     Softmax_Activation(&fc_activated,&fc0);
 
-    printf("%.10f",Sum_Grid(fc_activated));
+    //printf("%.10f",Sum_Grid(fc_activated));
+    printf("\nFinal Layer \n");
+    display_Grid(fc_activated);
 
 }
 
