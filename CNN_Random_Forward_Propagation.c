@@ -809,8 +809,7 @@ Grid* convolve(Block* block, Block* kernel,unsigned int stride,unsigned int padd
 
 //Can either be used to define the input images or the N * filters
 
-void Convolution(Block **input, Blocks * kernels,unsigned int stride,unsigned int padding){
-
+void Convolution(Block** bl_output, Block **input, Blocks * kernels,unsigned int stride,unsigned int padding){
 
     current_Layer("Convolution");
 
@@ -840,7 +839,7 @@ void Convolution(Block **input, Blocks * kernels,unsigned int stride,unsigned in
 
         }
 
-        *input=output;
+        *bl_output=output;
     }
 
 }
@@ -942,7 +941,7 @@ Grid* Pooling_On_Grid(Grid* grid,unsigned int size_kernel,unsigned int stride,un
 }
 
 // We will continue at this level
-void Pooling(Block **input,unsigned int size_kernel,unsigned int stride,unsigned int padding, char* choice){
+void Pooling(Block** bl_output,Block **input,unsigned int size_kernel,unsigned int stride,unsigned int padding, char* choice){
 
     current_Layer("Pooling");
 
@@ -976,7 +975,7 @@ void Pooling(Block **input,unsigned int size_kernel,unsigned int stride,unsigned
 
     }
 
-    *input=output;
+    *bl_output=output;
 
     }
 }
@@ -1322,7 +1321,7 @@ void Fully_Connected(FullyConnected** fc, FullyConnected** fc_input,double (*act
 
 void Softmax_Activation(Grid** fc_output ,FullyConnected** fc){
 
-    *fc_output=(*fc)->After_Activation;
+    *fc_output=deep_grid_copy((*fc)->After_Activation);
     apply_function_to_Grid_softmax(fc_output,&exp);
 
 }
@@ -1367,36 +1366,44 @@ void debug_code(){
 
 
     Block* input;
-    create_Block(&input,3,200,200,"random");
+    create_Block(&input,3,20,20,"random");
 
     //Creating random kernels
     Blocks* kernels;
     create_Blocks(&kernels,10,3,3,3,"random");
 
     //Covolution Layer
-    Convolution(&input,kernels,1,1);
-    shape_block(input);
+    Block* input0=input;
+    Block* output0;
+    Convolution(&output0,&input,kernels,1,1);
+    shape_block(input0);
 
     //Pooling Layer
-    Pooling(&input,3,2,1,"max");
-    shape_block(input);
+    Block* input1=output0;
+    Block* output1;
+    Pooling(&output1,&input1,3,2,1,"max");
+    shape_block(input1);
 
     Blocks* kernels_bis;
     create_Blocks(&kernels_bis,40,10,5,5,"random");
 
     //Covolution Layer
-    Convolution(&input,kernels_bis,1,2);
-    shape_block(input);
+    Block* input2=output1;
+    Block* output2;
+    Convolution(&output2,&input2,kernels_bis,1,2);
+    shape_block(input2);
 
     //Pooling Layer
-    Pooling(&input,5,1,0,"max");
-    shape_block(input);
+    Block* input3=output2;
+    Block* output3;
+    Pooling(&output3,&input3,5,1,0,"max");
+    shape_block(input3);
 
-    Flatten(&input);
-    shape_block(input);
+    Flatten(&input3);
+    shape_block(input3);
 
     FullyConnected* fc=initialize_Fully_Connected(1);
-    Fully_Connected_After_Flatten(&fc,&input,&relu,50);
+    Fully_Connected_After_Flatten(&fc,&input3,&relu,50);
 
     FullyConnected* fcb=initialize_Fully_Connected(1);
     Fully_Connected(&fcb,&fc,&relu,25);
