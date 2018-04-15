@@ -1204,7 +1204,9 @@ void Fully_Connected_After_Flatten(FullyConnected** fc, Block** input, double (*
             Grid* transposed_input_grid=transpose(input_grid);
 
             grid_dot_mutiplication(&Z_i,&local_fc->weights,&transposed_input_grid);
-            grid_dot_mutiplication(&A_i,&local_fc->weights,&transposed_input_grid);
+
+            A_i=deep_grid_copy(Z_i);
+
 
             local_fc->Before_Activation=Z_i;
 
@@ -1232,7 +1234,8 @@ void Fully_Connected_After_Flatten(FullyConnected** fc, Block** input, double (*
             Grid* transposed_input_grid=transpose(input_grid);
 
             grid_dot_mutiplication(&Z_i,&local_fc->weights,&transposed_input_grid);
-            grid_dot_mutiplication(&A_i,&local_fc->weights,&transposed_input_grid);
+
+            A_i=deep_grid_copy(Z_i);
 
             local_fc->Before_Activation=Z_i;
 
@@ -1281,7 +1284,9 @@ void Fully_Connected(FullyConnected** fc, FullyConnected** fc_input,double (*act
             local_fc->activation=*activation;
 
             grid_dot_mutiplication(&Z_i,&local_fc->weights,&(*fc_input)->After_Activation);
-            grid_dot_mutiplication(&A_i,&local_fc->weights,&(*fc_input)->After_Activation);
+            //grid_dot_mutiplication(&A_i,&local_fc->weights,&(*fc_input)->After_Activation);
+
+            A_i=deep_grid_copy(Z_i);
 
             local_fc->Before_Activation=Z_i;
 
@@ -1302,7 +1307,10 @@ void Fully_Connected(FullyConnected** fc, FullyConnected** fc_input,double (*act
             FullyConnected* local_fc=*fc;
 
             grid_dot_mutiplication(&Z_i,&local_fc->weights,&(*fc_input)->After_Activation);
-            grid_dot_mutiplication(&A_i,&local_fc->weights,&(*fc_input)->After_Activation);
+            //grid_dot_mutiplication(&A_i,&local_fc->weights,&(*fc_input)->After_Activation);
+
+            A_i=deep_grid_copy(Z_i);
+
 
             local_fc->Before_Activation=Z_i;
 
