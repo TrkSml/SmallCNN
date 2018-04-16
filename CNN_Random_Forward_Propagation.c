@@ -69,14 +69,28 @@ typedef struct{
 
 }FullyConnected;
 
+//In case we are dealing with a convolution / pooling
+typedef union{
+
+    struct pooling{
+        unsigned int size_kernel;
+        char* choice;
+        };
+    Blocks* kernels;
+
+}Kernels;
+
 
 typedef struct {
 
     void* input_data;
     void* output_data;
+    Kernels* kernels;
+
     void (*ptr_to_function)();
 
 }LAYER;
+
 
 typedef struct {
 
@@ -106,8 +120,6 @@ void associate_to_layer(LAYER** layer, void* input_data, void* output_data)
     (*layer)->output_data=output_data;
 
 }
-
-
 
 double add__(double a, double b){
     return a+b;
