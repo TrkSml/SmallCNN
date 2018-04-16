@@ -41,12 +41,13 @@ typedef enum{
 
 }TYPE_LAYER;
 
-//Define parameters and then construct union over them
+//Define parameters and then construct union over the parameters
 struct params_CONV{
 
     struct {
             unsigned int stride;
             unsigned int padding;
+            unsigned int nbr_filters;
         }paramters_CONV;
 
     TYPE_LAYER name;
@@ -97,28 +98,35 @@ struct params_FC{
 
 };
 
+/*
 struct params_CONV paramsCONV={name:CONV};
 struct params_POOL paramsPOOL={name:POOL};
 struct params_FLATTEN paramsFLATTEN={name:FLATTEN};
 struct params_FCAF paramsFCAF={name:FULLY_CONNECTED_AFTER_FLATTEN};
 struct params_FC paramsFC={name:FULLY_CONNECTED};
+*/
 
-typedef struct paramsCONV par_CONV;
-typedef struct paramsPOOL par_POOL;
-typedef struct paramsFLATTEN par_FLAT;
-typedef struct paramsFCAF par_FCAF;
-typedef struct paramsFC par_FC;
+typedef struct params_CONV params_CONV;
+typedef struct params_POOL params_POOL;
+typedef struct params_FLATTEN params_FLATTEN;
+typedef struct params_FCAF params_FCAF;
+typedef struct params_FC params_FC;
 
 
 typedef union{
 
-    par_CONV*   conv;
-    par_POOL*   pool;
-    par_FLAT*   flat;
-    par_FCAF*   fcaf;
-    par_FC*     fc;
+    params_CONV*      conv;
+    params_POOL*      pool;
+    params_FLATTEN*   flat;
+    params_FCAF*      fcaf;
+    params_FC*        fc;
 
 }Param_s;
+
+typedef struct{
+    Param_s* param_s;
+    char* choice;
+}Prms;
 
 //2D output
 //After single convolution
@@ -212,15 +220,36 @@ void Softmax_Activation(Grid** fc_output ,FullyConnected** fc);
 
 
 
-void add_layer(LAYER** layer, void** input_data,Param_s params)
+void add_layer_if_existing(LAYER** layer, void** input_data,Prms* params)
 {
-
-    if(!*layer){
 
     *layer=initialize_LAYER(1);
     (*layer)->input_data=*input_data;
+    if(!strcmp(params->choice,"CONV")){
+        Block* output;
+        Blocks* kernels;
+        create_Blocks(&kernels,params->param_s->conv->paramters_CONV.nbr_filters,);
 
+        // put the dimensions of input and carry on
 
+        Convolution(&bl_output,&(*layer)->input_data,params->param_s->conv,unsigned int stride,unsigned int padding);
+
+    }else
+    if(!strcmp(params->choice,"POOL")){
+
+    }else
+    if(!strcmp(params->choice,"FLAT")){
+
+    }else
+    if(!strcmp(params->choice,"FCAF")){
+
+    }else
+    if(!strcmp(params->choice,"FC")){
+
+    }else
+    {
+        printf("Please choose an available layer .. ");
+        exit(0);
 
     }
 
@@ -1610,6 +1639,7 @@ void debug_code(){
 void second_debug_code(){
 
     LAYER* l=NULL;
+
     Block* input;
     create_Block(&input,3,20,20,"random");
     //add_layer(&l,&input);
@@ -1620,6 +1650,7 @@ int main()
 
     //Debugging the code
     debug_code();
+
 
     printf("\nDONE :))) ! \n\n");
 
