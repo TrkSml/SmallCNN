@@ -30,6 +30,7 @@
 //#define add__(a,b) ({retun a+b;})
 //#define substract__(a,b) ({retun a-b;})
 
+
 //2D output
 //After single convolution
 typedef struct {
@@ -69,91 +70,43 @@ typedef struct{
 }FullyConnected;
 
 
-typedef enum
-{
-    GRID,
-    BLOCK
-
-}TYPE_DATA;
-
-typedef enum
-{
-    CONV,
-    POOL,
-    FULLY_CONNECTED,
-    FLATTEN,
-    FULLY_CONNECTED_AFTER_FLATTEN
-
-}TYPE_LAYER;
-
-
 typedef struct {
-    union
-    {
-        Block* block;
-        Grid* grid;
 
-    }DATA;
+    void* input_data;
+    void* output_data;
+    void (*ptr_to_function)();
 
-    TYPE_LAYER type;
 }LAYER;
 
+typedef struct {
 
-const char* getTypeLayer(TYPE_LAYER layer)
-{
-   switch (layer)
-   {
-      case CONV: return "CONV";
-      case POOL: return "POOL";
-      case FLATTEN: return "FLATTEN";
-      case FULLY_CONNECTED: return "FULLY_CONNECTED";
-      case FULLY_CONNECTED_AFTER_FLATTEN: return "FULLY_CONNECTED_AFTER_FLATTEN";
+    LAYER* first_layer;
+    LAYER* final_layer;
 
-   }
-}
+}Model;
 
-const char* getTypeData(TYPE_DATA data)
-{
-   switch (data)
-   {
-      case BLOCK: return "BLOCK";
-      case GRID: return "GRID";
-
-   }
-}
 
 LAYER* initialize_LAYER(size_t size_allocation);
 int test_equal_grids_dimensions(Grid* grid1, Grid* grid2);
 
-void associate_block_to_layer_type(LAYER** layer, TYPE_LAYER name, Block* block)
+
+void Flatten(Block **output, Block **input);
+void Convolution(Block** bl_output, Block **input, Blocks * kernels,unsigned int stride,unsigned int padding);
+void Pooling(Block** bl_output,Block **input,unsigned int size_kernel,unsigned int stride,unsigned int padding, char* choice);
+void Flatten(Block **output, Block **input);
+void Fully_Connected_After_Flatten(FullyConnected** fc, Block** input, double (*activation)(double), int output_layer_size);
+void Fully_Connected(FullyConnected** fc, FullyConnected** fc_input,double (*activation)(double), int output_layer_size);
+void Softmax_Activation(Grid** fc_output ,FullyConnected** fc);
+
+
+void associate_to_layer(LAYER** layer, void* input_data, void* output_data)
 {
 
-    (*layer)->type=name;
-    (*layer)->DATA.block=block;
+    (*layer)->input_data=input_data;
+    (*layer)->output_data=output_data;
+
 }
 
-
-void associate_grid_to_layer_type(LAYER** layer, TYPE_LAYER name, Grid* grid)
-{
-    (*layer)->type=name;
-    (*layer)->DATA.grid=grid;
-}
-
-void add_data_to_layer(LAYER** layer, TYPE_DATA type, void* data, TYPE_LAYER name)
-{
-
-    *layer=initialize_LAYER(1);
-
-     switch(type)
-    {
-        case GRID:
-        associate_grid_to_layer_type(layer,name,data);
-
-        case BLOCK:
-        associate_block_to_layer_type(layer,name,data);
-
-    }
-}
 
 
 double add__(double a, double b){
@@ -1031,6 +984,7 @@ Grid* Pooling_On_Grid(Grid* grid,unsigned int size_kernel,unsigned int stride,un
     }
 }
 
+
 // We will continue at this level
 void Pooling(Block** bl_output,Block **input,unsigned int size_kernel,unsigned int stride,unsigned int padding, char* choice){
 
@@ -1093,12 +1047,14 @@ void extract_Grid_From_Flatten_Block(Block** block, Grid** grid){
 }
 
 
-void Flatten(Block **input){
 
-    //Block* block=*(input);
+void Flatten(Block **output, Block **input){
+
+
     current_Layer("Flatten");
 
     if(!test_block_null_dimension(*input)){
+
 
         ERROR_NULL;
         exit(0);
@@ -1144,7 +1100,7 @@ void Flatten(Block **input){
     }
 
     block->matrix=Flattened;
-    *input=block;
+    *output=block;
 
     }
 
@@ -1254,6 +1210,7 @@ void grid_element_wise_mutiplication(Grid** output_grid, Grid** grid1, Grid** gr
 }
 
 
+
 void Fully_Connected_After_Flatten(FullyConnected** fc, Block** input, double (*activation)(double), int output_layer_size){
 
     current_Layer("Fully Connected");
@@ -1276,7 +1233,7 @@ void Fully_Connected_After_Flatten(FullyConnected** fc, Block** input, double (*
 
         {
 
-            *fc=(FullyConnected*)malloc(sizeof(FullyConnected));;
+            *fc=(FullyConnected*)malloc(sizeof(FullyConnected));
             FullyConnected* local_fc=*fc;
 
 
@@ -1339,6 +1296,7 @@ void Fully_Connected_After_Flatten(FullyConnected** fc, Block** input, double (*
 
     }
 }
+
 
 void Fully_Connected(FullyConnected** fc, FullyConnected** fc_input,double (*activation)(double), int output_layer_size){
 
@@ -1496,13 +1454,15 @@ void debug_code(){
     Block* input3=output2;
     Block* output3;
     Pooling(&output3,&input3,5,1,0,"max");
-    shape_block(input3);
 
-    Flatten(&input3);
-    shape_block(input3);
+    Block* input4=output3;
+    Block* output4;
+    Flatten(&output4,&input4);
+    shape_block(output4);
+    //Prob au niveau de output4
 
     FullyConnected* fc=initialize_Fully_Connected(1);
-    Fully_Connected_After_Flatten(&fc,&input3,&relu,50);
+    Fully_Connected_After_Flatten(&fc,&output4,&relu,50);
 
     FullyConnected* fcb=initialize_Fully_Connected(1);
     Fully_Connected(&fcb,&fc,&relu,25);
@@ -1513,6 +1473,7 @@ void debug_code(){
     Grid* fc_activated=initialize_Grid(1);
     Softmax_Activation(&fc_activated,&fc0);
 
+    //printf("%.10f",Sum_Grid(fc_activated));
     printf("\nFinal Layer \n");
     display_Grid(fc_activated);
 
@@ -1525,8 +1486,10 @@ int main()
     //Debugging the code
     debug_code();
 
+
     printf("\nDONE :))) ! \n\n");
 
     return 0;
 }
+
 
