@@ -69,6 +69,57 @@ typedef struct{
 }FullyConnected;
 
 
+typedef enum
+{
+    GRID, BLOCK
+}TYPE_DATA;
+
+typedef enum
+{
+    CONV, POOL
+}TYPE_LAYER;
+
+
+typedef struct {
+    union
+    {
+        Block* block;
+        Grid* grid;
+
+    }DATA;
+
+    TYPE_LAYER type;
+}LAYER;
+
+
+void associate_block_to_layer_type(LAYER* layer, TYPE_LAYER name, Block* block)
+{
+    layer->type=name;
+    layer->DATA.block=block;
+}
+
+
+void associate_grid_to_layer_type(LAYER* layer, TYPE_LAYER name, Grid* grid)
+{
+    layer->type=name;
+    layer->DATA.grid=grid;
+}
+
+void add_data_to_layer(LAYER* layer, TYPE_DATA type, void* data, TYPE_LAYER name)
+{
+
+     switch(type)
+    {
+        case GRID:
+        associate_grid_to_layer_type(layer,name,data);
+
+        case BLOCK:
+        associate_block_to_layer_type(layer,name,data);
+
+    }
+}
+
+
 double add__(double a, double b){
     return a+b;
 }
