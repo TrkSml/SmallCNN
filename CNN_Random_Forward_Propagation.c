@@ -31,6 +31,95 @@
 //#define substract__(a,b) ({retun a-b;})
 
 
+typedef enum{
+
+    CONV,
+    POOL,
+    FLATTEN,
+    FULLY_CONNECTED_AFTER_FLATTEN,
+    FULLY_CONNECTED
+
+}TYPE_LAYER;
+
+//Define parameters and then construct union over the parameters
+struct params_CONV{
+
+    struct {
+            unsigned int stride;
+            unsigned int padding;
+        }paramters_CONV;
+
+    TYPE_LAYER name;
+
+};
+
+
+struct params_POOL{
+
+    struct {
+            char* pooling_choice;
+            unsigned int kernel_size;
+
+        }paramters_POOL;
+
+    TYPE_LAYER name;
+
+};
+
+
+struct params_FLATTEN{
+
+    TYPE_LAYER name;
+
+};
+
+
+struct params_FCAF{
+    //Params for Fully connected after Flatten
+    struct  {
+        double (*activation)(double);
+        unsigned int output_size;
+        }paramters_FCAF;
+
+    TYPE_LAYER name;
+
+};
+
+
+struct params_FC{
+
+    struct {
+        double (*activation)(double);
+        unsigned int output_size;
+        }paramters_FC;
+
+    TYPE_LAYER name;
+
+};
+
+struct params_CONV paramsCONV={name:CONV};
+struct params_POOL paramsPOOL={name:POOL};
+struct params_FLATTEN paramsFLATTEN={name:FLATTEN};
+struct params_FCAF paramsFCAF={name:FULLY_CONNECTED_AFTER_FLATTEN};
+struct params_FC paramsFC={name:FULLY_CONNECTED};
+
+typedef struct paramsCONV par_CONV;
+typedef struct paramsPOOL par_POOL;
+typedef struct paramsFLATTEN par_FLAT;
+typedef struct paramsFCAF par_FCAF;
+typedef struct paramsFC par_FC;
+
+
+typedef union{
+
+    par_CONV*   conv;
+    par_POOL*   pool;
+    par_FLAT*   flat;
+    par_FCAF*   fcaf;
+    par_FC*     fc;
+
+}Param_s;
+
 //2D output
 //After single convolution
 typedef struct {
@@ -76,6 +165,7 @@ typedef struct {
         char* choice;
 }pool_information;
 
+
 typedef union{
 
     pool_information* psool;
@@ -107,10 +197,11 @@ typedef struct {
 
 
 LAYER* initialize_LAYER(size_t size_allocation);
+LAYER** initialize_pointer_LAYER(size_t size_allocation);
+
 int test_equal_grids_dimensions(Grid* grid1, Grid* grid2);
 
 
-void Flatten(Block **output, Block **input);
 void Convolution(Block** bl_output, Block **input, Blocks * kernels,unsigned int stride,unsigned int padding);
 void Pooling(Block** bl_output,Block **input,unsigned int size_kernel,unsigned int stride,unsigned int padding, char* choice);
 void Flatten(Block **output, Block **input);
@@ -120,14 +211,14 @@ void Softmax_Activation(Grid** fc_output ,FullyConnected** fc);
 
 
 
-void add_layer(LAYER** layer, void* input_data)
+
+void add_layer(LAYER** layer, void** input_data,Param_s params)
 {
-    if(!layer){
 
-    layer=initialize_pointer_LAYER(1);
+    if(!*layer){
 
-
-    (*layer)->input_data=input_data;
+    *layer=initialize_LAYER(1);
+    (*layer)->input_data=*input_data;
 
 
 
@@ -248,7 +339,7 @@ double* initialize_pointer_double(size_t size_allocation){
 
 
 LAYER** initialize_pointer_LAYER(size_t size_allocation){
-    return malloc(size_allocation*sizeof(LAYER));
+    return malloc(size_allocation*sizeof(LAYER*));
 }
 
 
@@ -1516,16 +1607,20 @@ void debug_code(){
 
 }
 
+void second_debug_code(){
 
+    LAYER* l=NULL;
+    Block* input;
+    create_Block(&input,3,20,20,"random");
+    //add_layer(&l,&input);
+
+}
 int main()
 {
 
     //Debugging the code
-    //debug_code();
+    debug_code();
 
-    LAYER** l=initialize_pointer_LAYER(1);
-
-    if(*l) write("lol");
     printf("\nDONE :))) ! \n\n");
 
     return 0;
