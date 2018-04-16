@@ -41,7 +41,7 @@ typedef enum{
 
 }TYPE_LAYER;
 
-//Define parameters and then construct union over the parameters
+//Define parameters and then construct union over them
 struct params_CONV{
 
     struct {
