@@ -69,13 +69,16 @@ typedef struct{
 
 }FullyConnected;
 
-//In case we are dealing with a convolution / pooling
-typedef union{
 
-    struct pooling{
+//In case we are dealing with a convolution / pooling
+typedef struct {
         unsigned int size_kernel;
         char* choice;
-        };
+}pool_information;
+
+typedef union{
+
+    pool_information* psool;
     Blocks* kernels;
 
 }Kernels;
@@ -88,6 +91,9 @@ typedef struct {
     Kernels* kernels;
 
     void (*ptr_to_function)();
+
+    struct LAYER* next_layer;
+    struct LAYER* previous_leyer;
 
 }LAYER;
 
@@ -113,13 +119,25 @@ void Fully_Connected(FullyConnected** fc, FullyConnected** fc_input,double (*act
 void Softmax_Activation(Grid** fc_output ,FullyConnected** fc);
 
 
-void associate_to_layer(LAYER** layer, void* input_data, void* output_data)
+
+void add_layer(LAYER** layer, void* input_data)
 {
+    if(!layer){
+
+    layer=initialize_pointer_LAYER(1);
+
 
     (*layer)->input_data=input_data;
-    (*layer)->output_data=output_data;
+
+
+
+    }
+
 
 }
+
+
+
 
 double add__(double a, double b){
     return a+b;
@@ -227,6 +245,12 @@ double** initialize_double_pointer_double(size_t size_allocation){
 double* initialize_pointer_double(size_t size_allocation){
     return malloc(size_allocation*sizeof(double));
 }
+
+
+LAYER** initialize_pointer_LAYER(size_t size_allocation){
+    return malloc(size_allocation*sizeof(LAYER));
+}
+
 
 LAYER* initialize_LAYER(size_t size_allocation){
     return malloc(size_allocation*sizeof(LAYER));
@@ -869,6 +893,7 @@ void Convolution(Block** bl_output, Block **input, Blocks * kernels,unsigned int
 
     current_Layer("Convolution");
 
+    if(!(*bl_output))write("NULL");
     if(!test_block_null_dimension(*input)){
         ERROR_NULL;
         exit(0);
@@ -1496,9 +1521,11 @@ int main()
 {
 
     //Debugging the code
-    debug_code();
+    //debug_code();
 
+    LAYER** l=initialize_pointer_LAYER(1);
 
+    if(*l) write("lol");
     printf("\nDONE :))) ! \n\n");
 
     return 0;
