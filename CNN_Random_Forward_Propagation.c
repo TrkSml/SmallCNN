@@ -71,12 +71,19 @@ typedef struct{
 
 typedef enum
 {
-    GRID, BLOCK
+    GRID,
+    BLOCK
+
 }TYPE_DATA;
 
 typedef enum
 {
-    CONV, POOL
+    CONV,
+    POOL,
+    FULLY_CONNECTED,
+    FLATTEN,
+    FULLY_CONNECTED_AFTER_FLATTEN
+
 }TYPE_LAYER;
 
 
@@ -92,21 +99,50 @@ typedef struct {
 }LAYER;
 
 
-void associate_block_to_layer_type(LAYER* layer, TYPE_LAYER name, Block* block)
+const char* getTypeLayer(TYPE_LAYER layer)
 {
-    layer->type=name;
-    layer->DATA.block=block;
+   switch (layer)
+   {
+      case CONV: return "CONV";
+      case POOL: return "POOL";
+      case FLATTEN: return "FLATTEN";
+      case FULLY_CONNECTED: return "FULLY_CONNECTED";
+      case FULLY_CONNECTED_AFTER_FLATTEN: return "FULLY_CONNECTED_AFTER_FLATTEN";
+
+   }
+}
+
+const char* getTypeData(TYPE_DATA data)
+{
+   switch (data)
+   {
+      case BLOCK: return "BLOCK";
+      case GRID: return "GRID";
+
+   }
+}
+
+LAYER* initialize_LAYER(size_t size_allocation);
+int test_equal_grids_dimensions(Grid* grid1, Grid* grid2);
+
+void associate_block_to_layer_type(LAYER** layer, TYPE_LAYER name, Block* block)
+{
+
+    (*layer)->type=name;
+    (*layer)->DATA.block=block;
 }
 
 
-void associate_grid_to_layer_type(LAYER* layer, TYPE_LAYER name, Grid* grid)
+void associate_grid_to_layer_type(LAYER** layer, TYPE_LAYER name, Grid* grid)
 {
-    layer->type=name;
-    layer->DATA.grid=grid;
+    (*layer)->type=name;
+    (*layer)->DATA.grid=grid;
 }
 
-void add_data_to_layer(LAYER* layer, TYPE_DATA type, void* data, TYPE_LAYER name)
+void add_data_to_layer(LAYER** layer, TYPE_DATA type, void* data, TYPE_LAYER name)
 {
+
+    *layer=initialize_LAYER(1);
 
      switch(type)
     {
@@ -225,6 +261,10 @@ double** initialize_double_pointer_double(size_t size_allocation){
 
 double* initialize_pointer_double(size_t size_allocation){
     return malloc(size_allocation*sizeof(double));
+}
+
+LAYER* initialize_LAYER(size_t size_allocation){
+    return malloc(size_allocation*sizeof(LAYER));
 }
 
 
@@ -1473,7 +1513,6 @@ void debug_code(){
     Grid* fc_activated=initialize_Grid(1);
     Softmax_Activation(&fc_activated,&fc0);
 
-    //printf("%.10f",Sum_Grid(fc_activated));
     printf("\nFinal Layer \n");
     display_Grid(fc_activated);
 
