@@ -44,11 +44,9 @@ typedef enum{
 //Define parameters and then construct union over the parameters
 struct params_CONV{
 
-    struct {
-            unsigned int stride;
-            unsigned int padding;
-            unsigned int nbr_filters;
-        }paramters_CONV;
+    unsigned int stride;
+    unsigned int padding;
+    unsigned int nbr_filters;
 
     TYPE_LAYER name;
 
@@ -57,11 +55,8 @@ struct params_CONV{
 
 struct params_POOL{
 
-    struct {
-            char* pooling_choice;
-            unsigned int kernel_size;
-
-        }paramters_POOL;
+    char* pooling_choice;
+    unsigned int kernel_size;
 
     TYPE_LAYER name;
 
@@ -77,10 +72,8 @@ struct params_FLATTEN{
 
 struct params_FCAF{
     //Params for Fully connected after Flatten
-    struct  {
-        double (*activation)(double);
-        unsigned int output_size;
-        }paramters_FCAF;
+    double (*activation)(double);
+    unsigned int output_size;
 
     TYPE_LAYER name;
 
@@ -89,39 +82,20 @@ struct params_FCAF{
 
 struct params_FC{
 
-    struct {
-        double (*activation)(double);
-        unsigned int output_size;
-        }paramters_FC;
+    double (*activation)(double);
+    unsigned int output_size;
 
     TYPE_LAYER name;
 
 };
 
-/*
+
 struct params_CONV paramsCONV={name:CONV};
 struct params_POOL paramsPOOL={name:POOL};
 struct params_FLATTEN paramsFLATTEN={name:FLATTEN};
 struct params_FCAF paramsFCAF={name:FULLY_CONNECTED_AFTER_FLATTEN};
 struct params_FC paramsFC={name:FULLY_CONNECTED};
-*/
 
-typedef struct params_CONV params_CONV;
-typedef struct params_POOL params_POOL;
-typedef struct params_FLATTEN params_FLATTEN;
-typedef struct params_FCAF params_FCAF;
-typedef struct params_FC params_FC;
-
-
-typedef union{
-
-    params_CONV*      conv;
-    params_POOL*      pool;
-    params_FLATTEN*   flat;
-    params_FCAF*      fcaf;
-    params_FC*        fc;
-
-}Param_s;
 
 typedef struct{
     Param_s* param_s;
@@ -181,14 +155,18 @@ typedef union{
 
 }Kernels;
 
+typedef union{
+    Grid* grid;
+    Block* block;
+}data;
 
 typedef struct {
 
-    void* input_data;
-    void* output_data;
+    data* input_data;
+    data* output_data;
     Kernels* kernels;
 
-    void (*ptr_to_function)();
+    //void (*ptr_to_function)();
 
     struct LAYER* next_layer;
     struct LAYER* previous_leyer;
@@ -197,6 +175,8 @@ typedef struct {
 
 
 typedef struct {
+    Block* input;
+    Grid* output;
 
     LAYER* first_layer;
     LAYER* final_layer;
@@ -220,41 +200,25 @@ void Softmax_Activation(Grid** fc_output ,FullyConnected** fc);
 
 
 
-void add_layer_if_existing(LAYER** layer, void** input_data,Prms* params)
-{
+void add_conv_layer(Model** model, paramsCONV prmconvs){
 
-    *layer=initialize_LAYER(1);
-    (*layer)->input_data=*input_data;
-    if(!strcmp(params->choice,"CONV")){
-        Block* output;
-        Blocks* kernels;
-        create_Blocks(&kernels,params->param_s->conv->paramters_CONV.nbr_filters,);
+    Layer* layer=initialize_LAYER(1);
 
-        // put the dimensions of input and carry on
 
-        Convolution(&bl_output,&(*layer)->input_data,params->param_s->conv,unsigned int stride,unsigned int padding);
 
-    }else
-    if(!strcmp(params->choice,"POOL")){
+    Block* output;
+    Blocks* kernels;
 
-    }else
-    if(!strcmp(params->choice,"FLAT")){
+    create_Blocks(&kernels,paramters_CONV.nbr_filters,((Block*)(*layer)->input_data)->depth,\
+                  ((Block*)(*layer)->input_data)->height,((Block*)(*layer)->input_data)->width,"random");
 
-    }else
-    if(!strcmp(params->choice,"FCAF")){
+    (*layer)->kernels->kernels=kernels;
+    Convolution(&(*layer)->input_data,kernels,paramters_CONV.nbr_filters,\
+                paramters_CONV.stride,paramters_CONV.padding);
 
-    }else
-    if(!strcmp(params->choice,"FC")){
 
-    }else
-    {
-        printf("Please choose an available layer .. ");
-        exit(0);
 
     }
-
-
-}
 
 
 
@@ -1642,7 +1606,8 @@ void second_debug_code(){
 
     Block* input;
     create_Block(&input,3,20,20,"random");
-    //add_layer(&l,&input);
+    //add_new_layer(&l,&input);
+
 
 }
 int main()
