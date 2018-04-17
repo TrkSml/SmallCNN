@@ -56,6 +56,8 @@ struct params_CONV{
 
 struct params_POOL{
 
+    unsigned int stride;
+    unsigned int padding;
     char* pooling_choice;
     unsigned int kernel_size;
 
@@ -189,18 +191,53 @@ LAYER* initialize_LAYER(size_t size_allocation);
 LAYER** initialize_pointer_LAYER(size_t size_allocation);
 Model* initialize_Model(void);
 Block* deep_block_copy(Block* block);
+void display_Block(Block* grid);
+
 
 int test_equal_grids_dimensions(Grid* grid1, Grid* grid2);
 
 
-void Convolution(Block** bl_output, Block **input, Blocks * kernels,unsigned int stride,unsigned int padding);
-void Pooling(Block** bl_output,Block **input,unsigned int size_kernel,unsigned int stride,unsigned int padding, char* choice);
-void Flatten(Block **output, Block **input);
-void Fully_Connected_After_Flatten(FullyConnected** fc, Block** input, double (*activation)(double), int output_layer_size);
-void Fully_Connected(FullyConnected** fc, FullyConnected** fc_input,double (*activation)(double), int output_layer_size);
-void Softmax_Activation(Grid** fc_output ,FullyConnected** fc);
-void create_Block(Block** block,unsigned int input_depth,unsigned int input_height,unsigned int input_width,char* choice);
-void create_Blocks(Blocks **blocks,unsigned int length,unsigned int depth,unsigned int height,unsigned int width, char* choice);
+void Convolution(Block** bl_output,
+                 Block **input,
+                 Blocks * kernels,
+                 unsigned int stride,
+                 unsigned int padding);
+
+void Pooling(Block** bl_output,
+             Block **input,
+             unsigned int size_kernel,
+             unsigned int stride,
+             unsigned int padding,
+             char* choice);
+
+void Flatten(Block **output,
+              Block **input);
+
+void Fully_Connected_After_Flatten(FullyConnected** fc,
+                                   Block** input,
+                                   double (*activation)(double),
+                                    int output_layer_size);
+
+void Fully_Connected(FullyConnected** fc,
+                     FullyConnected** fc_input,
+                     double (*activation)(double),
+                     int output_layer_size);
+
+void Softmax_Activation(Grid** fc_output ,
+                        FullyConnected** fc);
+
+void create_Block(Block** block,
+                  unsigned int input_depth,
+                  unsigned int input_height,
+                  unsigned int input_width,
+                  char* choice);
+
+void create_Blocks(Blocks **blocks,
+                   unsigned int length,
+                   unsigned int depth,
+                   unsigned int height,
+                   unsigned int width,
+                   char* choice);
 
 
 LAYER* conv_layer(paramsCONV prmconvs, Block* input){
@@ -219,7 +256,50 @@ LAYER* conv_layer(paramsCONV prmconvs, Block* input){
 
     layer->kernels=(Kernels*)malloc(sizeof(Kernels*));
     layer->kernels->ker=kernels;
-    Convolution(&output,&input,kernels,prmconvs.stride,prmconvs.padding);
+    Convolution(&output,
+                &input,
+                kernels,
+                prmconvs.stride,
+                prmconvs.padding);
+
+    layer->output_data->block=output;
+
+    layer->previous_leyer=NULL;
+    layer->next_layer=NULL;
+
+    return layer;
+
+    }
+
+LAYER* pool_layer(paramsPOOL prmpool, Block* input){
+
+    LAYER* layer=initialize_LAYER(1);
+
+    layer->input_data=(data*)malloc(sizeof(data));
+    layer->output_data=(data*)malloc(sizeof(data));
+
+
+    layer->input_data->block=deep_block_copy(input);
+
+    Block* output;
+
+    layer->kernels=(pool_information*)malloc(sizeof(pool_information));
+
+
+    layer->kernels->psool->choice=prmpool.pooling_choice;
+
+    layer->kernels->psool->size_kernel=prmpool.kernel_size;
+
+
+    display_Block(input);
+    Pooling(&output,&input,
+                prmpool.kernel_size,
+                prmpool.stride,
+                prmpool.padding,
+                prmpool.pooling_choice);
+
+
+    DEBUG;
 
     layer->output_data->block=output;
 
@@ -253,7 +333,7 @@ LAYER* final_layer(Model* model){
 }
 
 
-void add_CONV(Model** model, unsigned int nbr_filters, int stride, unsigned int padding){
+void add_CONV(Model** model, unsigned int nbr_filters, unsigned int stride, unsigned int padding){
 
     paramsCONV params_conv={name:CONV, stride:stride, padding:padding, nbr_filters: nbr_filters};
     LAYER* conv_l=conv_layer(params_conv,(*model)->X);
@@ -263,10 +343,13 @@ void add_CONV(Model** model, unsigned int nbr_filters, int stride, unsigned int 
 
 
     if(!current_first && ! current_last){
+
+        conv_l->next_layer=NULL;
+        conv_l->previous_leyer=NULL;
+
         current_first=conv_l;
         current_last=current_first;
-        current_first->next_layer=NULL;
-        current_last->previous_leyer=NULL;
+
         write("First case .");
 
     }
@@ -298,7 +381,75 @@ void add_CONV(Model** model, unsigned int nbr_filters, int stride, unsigned int 
 
 
     (*model)->first_layer=current_first;
-    (*model)->first_layer=current_last;
+    (*model)->final_layer=current_last;
+
+
+
+}
+
+void add_POOL(Model** model, unsigned int stride,
+                             unsigned int padding,
+                             char* pooling_choice,
+                             unsigned int kernel_size){
+
+    paramsPOOL params_pool={name:POOL,stride:stride,
+                            padding:padding,
+                            pooling_choice: pooling_choice,
+                            kernel_size: kernel_size
+                            };
+
+
+
+    LAYER* pool_l=pool_layer(params_pool,(*model)->final_layer->output_data->block);
+
+
+
+    LAYER* current_first=(*model)->first_layer;
+    LAYER* current_last=(*model)->first_layer;
+
+
+
+
+    if(!current_first && ! current_last){
+
+        write("First case .");
+        current_first=pool_l;
+        current_last=current_first;
+        current_first=NULL;
+        current_last->previous_leyer=NULL;
+
+    }
+    else
+
+    if(current_first==current_last){
+
+        write("Second case .");
+        current_last->next_layer=initialize_LAYER(1);
+        current_last->next_layer=pool_l;
+        pool_l->previous_leyer=current_first;
+        pool_l->next_layer=NULL;
+        current_last=pool_l;
+
+
+    }else
+
+    {
+        write("Third case .");
+        while(current_last->next_layer)
+            current_last=current_last->next_layer;
+
+        current_last->next_layer=initialize_LAYER(1);
+        current_last->next_layer=pool_l;
+        pool_l->previous_leyer=current_last;
+        pool_l->next_layer=NULL;
+        current_last=pool_l;
+
+
+    }
+
+
+    (*model)->first_layer=current_first;
+    (*model)->final_layer=current_last;
 
 }
 
@@ -1167,6 +1318,7 @@ Grid* Pooling_On_Grid(Grid* grid,unsigned int size_kernel,unsigned int stride,un
     output_convolution_grid->grid=(double**)malloc(output_convolution_grid->height*sizeof(double*));
 
 
+    
     for(index_height_output=begin_point_height;index_height_output<end_point_height;index_height_output++){
         double *row=(double*)malloc(output_convolution_grid->width*sizeof(double));
 
@@ -1214,19 +1366,22 @@ void Pooling(Block** bl_output,Block **input,unsigned int size_kernel,unsigned i
 
 
    unsigned int index_output_depth;
+
     for(index_output_depth=0;index_output_depth<output->depth;index_output_depth++){
 
         Grid* grid_from_current_block=extract_grid_from_given_depth(input,index_output_depth);
         Grid* pooled_grid=Pooling_On_Grid(grid_from_current_block,size_kernel,stride,padding,choice);
 
+
         *(output->matrix+index_output_depth)=pooled_grid->grid;
 
-        free(grid_from_current_block);
+       free(grid_from_current_block);
         free(pooled_grid);
 
     }
 
     *bl_output=output;
+
 
     }
 }
@@ -1687,7 +1842,6 @@ void debug_code(){
 
 void second_debug_code(){
 
-
     Model* model;
     Block* X;
     create_Block(&X,5,5,5,"random");
@@ -1697,10 +1851,13 @@ void second_debug_code(){
 
     create_Model(&model,X,Y);
 
+
     add_CONV(&model,10,1,1);
+    add_POOL(&model,1,1,"max",3);
     //add_new_layer(&l,&input);
 
-    //display_Block(model->first_layer->output_data->block);
+    display_Block(model->first_layer->output_data->block);
+
 
 }
 int main()
