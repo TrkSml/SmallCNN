@@ -21,6 +21,7 @@
 #define ERROR_EVEN_DIMENSIONS printf(" How about using a kernel with odd sizes :))) ! .. ")
 #define ERROR_DIMENSION_GRID_MULT printf("Please review the dimensions of the grid you want to perform multiplication on.\n")
 #define ERROR_DIM_FLATTEN printf("Input must be flattened.\n")
+#define ERROR_MODEL printf("\nPlease initialize the model before starting to use it.\n")
 
 #define current_Layer(x) printf("\nCurrent Layer: %s\n",x)
 #define max(X, Y)  ((X) > (Y) ? (X) : (Y))
@@ -90,17 +91,12 @@ struct params_FC{
 };
 
 
-struct params_CONV paramsCONV={name:CONV};
-struct params_POOL paramsPOOL={name:POOL};
-struct params_FLATTEN paramsFLATTEN={name:FLATTEN};
-struct params_FCAF paramsFCAF={name:FULLY_CONNECTED_AFTER_FLATTEN};
-struct params_FC paramsFC={name:FULLY_CONNECTED};
+typedef struct params_CONV paramsCONV;
+typedef struct params_POOL paramsPOOL;
+typedef struct params_FLATTEN paramsFLATTEN;
+typedef struct params_FCAF paramsFCAF;
+typedef struct params_FC paramsFC;
 
-
-typedef struct{
-    Param_s* param_s;
-    char* choice;
-}Prms;
 
 //2D output
 //After single convolution
@@ -112,18 +108,22 @@ typedef struct {
 } Grid;
 
 //3D Block for a single
-typedef struct {
+typedef struct{
+
    unsigned int depth;
    unsigned int width;
    unsigned int height;
     double*** matrix;
-} Block;
+
+}Block;
 
 //4D output
 //After convolution with N filters
 typedef struct{
+
    unsigned int length;
     Block** blocks;
+
 }Blocks;
 
 
@@ -151,13 +151,15 @@ typedef struct {
 typedef union{
 
     pool_information* psool;
-    Blocks* kernels;
+    Blocks* ker;
 
 }Kernels;
 
 typedef union{
+
     Grid* grid;
     Block* block;
+
 }data;
 
 typedef struct {
@@ -166,8 +168,6 @@ typedef struct {
     data* output_data;
     Kernels* kernels;
 
-    //void (*ptr_to_function)();
-
     struct LAYER* next_layer;
     struct LAYER* previous_leyer;
 
@@ -175,8 +175,9 @@ typedef struct {
 
 
 typedef struct {
-    Block* input;
-    Grid* output;
+
+    Block* X;
+    Grid* Y;
 
     LAYER* first_layer;
     LAYER* final_layer;
@@ -186,6 +187,8 @@ typedef struct {
 
 LAYER* initialize_LAYER(size_t size_allocation);
 LAYER** initialize_pointer_LAYER(size_t size_allocation);
+Model* initialize_Model(void);
+Block* deep_block_copy(Block* block);
 
 int test_equal_grids_dimensions(Grid* grid1, Grid* grid2);
 
@@ -196,31 +199,108 @@ void Flatten(Block **output, Block **input);
 void Fully_Connected_After_Flatten(FullyConnected** fc, Block** input, double (*activation)(double), int output_layer_size);
 void Fully_Connected(FullyConnected** fc, FullyConnected** fc_input,double (*activation)(double), int output_layer_size);
 void Softmax_Activation(Grid** fc_output ,FullyConnected** fc);
+void create_Block(Block** block,unsigned int input_depth,unsigned int input_height,unsigned int input_width,char* choice);
+void create_Blocks(Blocks **blocks,unsigned int length,unsigned int depth,unsigned int height,unsigned int width, char* choice);
 
 
+LAYER* conv_layer(paramsCONV prmconvs, Block* input){
 
+    LAYER* layer=initialize_LAYER(1);
 
-void add_conv_layer(Model** model, paramsCONV prmconvs){
+    layer->input_data=(data*)malloc(sizeof(data));
+    layer->output_data=(data*)malloc(sizeof(data));
 
-    Layer* layer=initialize_LAYER(1);
-
-
+    layer->input_data->block=deep_block_copy(input);
 
     Block* output;
     Blocks* kernels;
 
-    create_Blocks(&kernels,paramters_CONV.nbr_filters,((Block*)(*layer)->input_data)->depth,\
-                  ((Block*)(*layer)->input_data)->height,((Block*)(*layer)->input_data)->width,"random");
+    create_Blocks(&kernels,prmconvs.nbr_filters, input->depth, input->height, input->width,"random");
 
-    (*layer)->kernels->kernels=kernels;
-    Convolution(&(*layer)->input_data,kernels,paramters_CONV.nbr_filters,\
-                paramters_CONV.stride,paramters_CONV.padding);
+    layer->kernels=(Kernels*)malloc(sizeof(Kernels*));
+    layer->kernels->ker=kernels;
+    Convolution(&output,&input,kernels,prmconvs.stride,prmconvs.padding);
 
+    layer->output_data->block=output;
 
+    layer->previous_leyer=NULL;
+    layer->next_layer=NULL;
+
+    return layer;
 
     }
 
 
+void create_Model(Model** model, Block* X, Grid *Y){
+
+    *model=initialize_Model();
+    (*model)->first_layer=NULL;
+    (*model)->final_layer=NULL;
+    (*model)->X=X;
+    (*model)->Y=Y;
+
+}
+
+LAYER* final_layer(Model* model){
+
+    if(!model){
+        ERROR_MODEL;
+        exit(0);
+    }
+
+    return model->final_layer;
+
+}
+
+
+void add_CONV(Model** model, unsigned int nbr_filters, int stride, unsigned int padding){
+
+    paramsCONV params_conv={name:CONV, stride:stride, padding:padding, nbr_filters: nbr_filters};
+    LAYER* conv_l=conv_layer(params_conv,(*model)->X);
+
+    LAYER* current_first=(*model)->first_layer;
+    LAYER* current_last=(*model)->first_layer;
+
+
+    if(!current_first && ! current_last){
+        current_first=conv_l;
+        current_last=current_first;
+        current_first->next_layer=NULL;
+        current_last->previous_leyer=NULL;
+        write("First case .");
+
+    }
+    else
+
+    if(current_first==current_last){
+
+        current_last->next_layer=initialize_LAYER(1);
+        current_last->next_layer=conv_l;
+        conv_l->previous_leyer=current_first;
+        conv_l->next_layer=NULL;
+        current_last=conv_l;
+        write("Second case .");
+
+    }else
+
+    {
+        while(current_last->next_layer)
+            current_last=current_last->next_layer;
+
+        current_last->next_layer=initialize_LAYER(1);
+        current_last->next_layer=conv_l;
+        conv_l->previous_leyer=current_last;
+        conv_l->next_layer=NULL;
+        current_last=conv_l;
+        write("Third case .");
+
+    }
+
+
+    (*model)->first_layer=current_first;
+    (*model)->first_layer=current_last;
+
+}
 
 
 double add__(double a, double b){
@@ -338,6 +418,12 @@ LAYER** initialize_pointer_LAYER(size_t size_allocation){
 
 LAYER* initialize_LAYER(size_t size_allocation){
     return malloc(size_allocation*sizeof(LAYER));
+}
+
+Model* initialize_Model(void){
+
+    return malloc(sizeof(Model));
+
 }
 
 
@@ -977,7 +1063,6 @@ void Convolution(Block** bl_output, Block **input, Blocks * kernels,unsigned int
 
     current_Layer("Convolution");
 
-    if(!(*bl_output))write("NULL");
     if(!test_block_null_dimension(*input)){
         ERROR_NULL;
         exit(0);
@@ -1602,19 +1687,27 @@ void debug_code(){
 
 void second_debug_code(){
 
-    LAYER* l=NULL;
 
-    Block* input;
-    create_Block(&input,3,20,20,"random");
+    Model* model;
+    Block* X;
+    create_Block(&X,5,5,5,"random");
+
+    Grid* Y;
+    create_Grid(&Y,5,5,"random");
+
+    create_Model(&model,X,Y);
+
+    add_CONV(&model,10,1,1);
     //add_new_layer(&l,&input);
 
+    //display_Block(model->first_layer->output_data->block);
 
 }
 int main()
 {
 
     //Debugging the code
-    debug_code();
+    second_debug_code();
 
 
     printf("\nDONE :))) ! \n\n");
