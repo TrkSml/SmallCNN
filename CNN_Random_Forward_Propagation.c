@@ -345,6 +345,28 @@ LAYER* activation_layer(Block* input,double (*activation)(double)){
 
     }
 
+LAYER* softmax_activation_layer(FullyConnected* input){
+
+    LAYER* layer;
+
+    initialize_layer_content_fc(&layer,&input);
+
+    FullyConnected* fc=initialize_Fully_Connected(1);
+    current_Layer("Softmax Activation");
+
+    Grid* fc_output;
+    Softmax_Activation(&fc_output,&input);
+
+    //layer->input_data->block=input;
+    layer->output_data->grid=fc_output;
+
+    return layer;
+
+    }
+
+
+
+
 
 LAYER* pool_layer(paramsPOOL prmpool, Block* input){
 
@@ -653,6 +675,28 @@ void ACTIVATION(Model** model,
 
     update_model(model,&act_l);
     shape_grid((*model)->final_layer->output_data->block);
+
+}
+
+void SOFTMAX_ACTIVATION(Model** model){
+
+
+    LAYER* act_l=initialize_LAYER(1);
+    (*model)->nbr_levels++;
+
+    if((*model)->final_layer){
+
+        act_l=softmax_activation_layer((*model)->final_layer->output_data->fc);
+    }
+    else{
+
+        write("Cannot use Softmax Activation layer at this level .. ");
+        exit(0);
+
+    }
+
+    update_model(model,&act_l);
+    shape_grid((*model)->final_layer->output_data->fc);
 
 }
 
@@ -2004,14 +2048,14 @@ void display_Grid(Grid *table){
 }
 
 
-void second_debug_code(){
+void model_code(){
 
 
     Model* model;
 
     //declaring the input | output
     Block* X;
-    create_Block(&X,5,80,80,"random");
+    create_Block(&X,5,80,55,"random");
 
     Grid* Y;
     create_Grid(&Y,5,5,"random");
@@ -2019,24 +2063,27 @@ void second_debug_code(){
     create_Model(&model,X,Y);
 
     add_CONV(&model,5,1,2,3);
+    ACTIVATION(&model,&relu);
     add_POOL(&model,2,2,3,"max");
     add_CONV(&model,10,2,2,5);
-    add_POOL(&model,2,2,3,"max");
+    ACTIVATION(&model,&relu);
     add_POOL(&model,1,1,5,"max");
     add_CONV(&model,100,2,2,7);
     ACTIVATION(&model,&relu);
     add_FLAT(&model);
     add_FCAF(&model,&sigmoid,100);
     add_FC(&model,&sigmoid,50);
-    add_FC(&model,&sigmoid,10);
+    add_FC(&model,&sigmoid,12);s
+    SOFTMAX_ACTIVATION(&model);
+
+    display_Grid(model->final_layer->output_data->grid);
 
 }
-
 int main()
 {
 
     //Debugging the code
-    second_debug_code();
+    model_code();
 
     printf("\nDONE :))) ! \n\n");
 
