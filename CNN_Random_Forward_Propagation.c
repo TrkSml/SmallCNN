@@ -76,7 +76,7 @@ struct params_FLATTEN{
 
 struct params_FCAF{
     //Params for Fully connected after Flatten
-    double (*activation)(double);
+    double (*activation__)(double);
     unsigned int output_size;
 
     TYPE_LAYER name;
@@ -151,11 +151,16 @@ typedef struct{
         char* choice;
 }pool_information;
 
+typedef union{
+    Block* block;
+    Grid* grid;
+}Ker;
 
 typedef union Kernels_{
 
     pool_information* psool;
-    Blocks* ker;
+    Ker* ker;
+    Blocks* blocks;
 
 }Kernels;
 
@@ -194,7 +199,13 @@ LAYER* initialize_LAYER(size_t size_allocation);
 LAYER** initialize_pointer_LAYER(size_t size_allocation);
 Model* initialize_Model(void);
 Block* deep_block_copy(Block* block);
-void display_Block(Block* grid);
+
+void display_Block(Block* block);
+void display_Grid(Grid* grid);
+
+void shape_block(Block* Block);
+void shape_grid(Grid* grid);
+
 unsigned int control_parity_kernel_size(unsigned int size_kernel);
 
 void AddPadding_Block(Block** block, unsigned int padding);
@@ -245,22 +256,39 @@ void create_Blocks(Blocks **blocks,
                    char* choice);
 
 
+void initialize_layer_content(LAYER** layer, Block** input){
+
+    *layer=initialize_LAYER(1);
+
+    (*layer)->input_data=(data*)malloc(sizeof(data));
+    (*layer)->output_data=(data*)malloc(sizeof(data));
+
+    (*layer)->input_data->block=deep_block_copy(*input);
+
+    (*layer)->kernels=(Kernels*)malloc(sizeof(Kernels*));
+
+    (*layer)->kernels->ker=NULL;
+    (*layer)->kernels->psool=NULL;
+
+    (*layer)->previous_leyer=NULL;
+    (*layer)->next_layer=NULL;
+
+}
+
 LAYER* conv_layer(paramsCONV prmconvs, Block* input){
 
-    LAYER* layer=initialize_LAYER(1);
+    LAYER* layer;
 
-    layer->input_data=(data*)malloc(sizeof(data));
-    layer->output_data=(data*)malloc(sizeof(data));
-
-    layer->input_data->block=deep_block_copy(input);
+    initialize_layer_content(&layer,&input);
 
     Block* output;
     Blocks* kernels;
 
     create_Blocks(&kernels,prmconvs.nbr_filters, input->depth,prmconvs.kernel_size,prmconvs.kernel_size,"random");
 
-    layer->kernels=(Kernels*)malloc(sizeof(Kernels*));
-    layer->kernels->ker=kernels;
+    layer->kernels->ker=(Ker*)malloc(sizeof(Ker));
+    layer->kernels->blocks=kernels;
+
     Convolution(&output,
                 &input,
                 kernels,
@@ -270,30 +298,18 @@ LAYER* conv_layer(paramsCONV prmconvs, Block* input){
 
     layer->output_data->block=output;
 
-    layer->previous_leyer=NULL;
-    layer->next_layer=NULL;
-
     return layer;
 
     }
 
 LAYER* pool_layer(paramsPOOL prmpool, Block* input){
 
-    LAYER* layer=initialize_LAYER(1);
+    LAYER* layer;
 
-    layer->input_data=(data*)malloc(sizeof(data));
-    layer->output_data=(data*)malloc(sizeof(data));
-
-
-    layer->input_data->block=deep_block_copy(input);
+    initialize_layer_content(&layer,&input);
 
     Block* output;
-
-    layer->kernels=(Kernels*)malloc(sizeof(Kernels));
-
     layer->kernels->psool=(pool_information*)malloc(sizeof(pool_information));
-    layer->kernels->psool->choice=prmpool.pooling_choice;
-
     layer->kernels->psool->size_kernel=prmpool.kernel_size;
 
     Pooling(&output,&input,
@@ -305,14 +321,51 @@ LAYER* pool_layer(paramsPOOL prmpool, Block* input){
 
     layer->output_data->block=output;
 
-    layer->previous_leyer=NULL;
-    layer->next_layer=NULL;
+    return layer;
 
+    }
+
+
+
+LAYER* flatten_layer(paramsFLATTEN prmft, Block* input){
+
+    LAYER* layer;
+
+    initialize_layer_content(&layer,&input);
+
+    Block* output;
+
+    Flatten(&output,&input);
+
+    layer->output_data->block=output;
+
+    return layer;
+
+    }
+
+
+LAYER* fcaf_layer(paramsFCAF prmfcaf, Block* input){
+
+    LAYER* layer;
+
+    initialize_layer_content(&layer,&input);
+
+    FullyConnected* output;
+
+    layer->kernels->ker=(Ker*)malloc(sizeof(Ker));
+
+    write("debut");
+    Fully_Connected_After_Flatten(&output,&input,prmfcaf.activation__,prmfcaf.output_size);
+    write("fin");
+
+    layer->kernels->ker->grid=output->weights;
+    layer->output_data->grid=output->After_Activation;
 
 
     return layer;
 
     }
+
 
 
 void create_Model(Model** model, Block* X, Grid *Y){
@@ -428,6 +481,57 @@ void add_POOL(Model** model, unsigned int stride,
 
     update_model(model,&pool_l);
     shape_block((*model)->final_layer->output_data->block);
+
+}
+
+void add_FLAT(Model** model){
+
+    paramsFLATTEN params_fl={name:FLATTEN};
+
+
+    LAYER* flatten_l=initialize_LAYER(1);
+    (*model)->nbr_levels++;
+
+    if((*model)->final_layer){
+
+        flatten_l=flatten_layer(params_fl,(*model)->final_layer->output_data->block);
+    }
+    else{
+
+        write("Cannot use Flattening layer at this level .. ");
+        exit(0);
+
+    }
+
+    update_model(model,&flatten_l);
+    shape_block((*model)->final_layer->output_data->block);
+
+}
+
+void add_FCAF(Model** model,double (*activation)(double),
+                            unsigned int output_size){
+
+    paramsFCAF params_fcaf={name:FULLY_CONNECTED_AFTER_FLATTEN,
+                            activation__:activation,
+                            output_size:output_size};
+
+
+    LAYER* fcaf_l=initialize_LAYER(1);
+    (*model)->nbr_levels++;
+
+    if((*model)->final_layer){
+
+        fcaf_l=fcaf_layer(params_fcaf,(*model)->final_layer->output_data->block);
+    }
+    else{
+
+        write("Cannot use Flattening layer at this level .. ");
+        exit(0);
+
+    }
+
+    update_model(model,&fcaf_l);
+    shape_grid((*model)->final_layer->output_data->grid);
 
 }
 
@@ -1613,8 +1717,6 @@ void Fully_Connected_After_Flatten(FullyConnected** fc, Block** input, double (*
             local_fc->previous_size=input_layer_size;
             local_fc->current_size=output_layer_size;
 
-            shape_grid(local_fc->After_Activation);
-
 
             }
         }
@@ -1847,13 +1949,16 @@ void second_debug_code(){
     add_POOL(&model,2,2,3,"max");
     add_POOL(&model,1,1,5,"max");
     add_CONV(&model,100,2,2,7);
+    add_FLAT(&model);
+    add_FCAF(&model,&sigmoid,100);
+
 
 }
-
 int main()
 {
 
     //Debugging the code
+
     second_debug_code();
 
 
@@ -1861,4 +1966,5 @@ int main()
 
     return 0;
 }
+
 
