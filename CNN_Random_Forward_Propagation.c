@@ -86,7 +86,7 @@ struct params_FCAF{
 
 struct params_FC{
 
-    double (*activation)(double);
+    double (*activation__)(double);
     unsigned int output_size;
 
     TYPE_LAYER name;
@@ -168,6 +168,7 @@ typedef union data_{
 
     Grid* grid;
     Block* block;
+    FullyConnected* fc;
 
 }data;
 
@@ -206,12 +207,15 @@ void display_Grid(Grid* grid);
 void shape_block(Block* Block);
 void shape_grid(Grid* grid);
 
+FullyConnected* deep_fc_copy(FullyConnected* fc);
+
 unsigned int control_parity_kernel_size(unsigned int size_kernel);
-
 void AddPadding_Block(Block** block, unsigned int padding);
-
 int test_equal_grids_dimensions(Grid* grid1, Grid* grid2);
+FullyConnected* initialize_Fully_Connected(size_t size_allocation);
 
+double relu(double x);
+double sigmoid(double x);
 
 void Convolution(Block** bl_output,
                  Block **input,
@@ -256,7 +260,26 @@ void create_Blocks(Blocks **blocks,
                    char* choice);
 
 
-void initialize_layer_content(LAYER** layer, Block** input){
+void initialize_layer_content_fc(LAYER** layer, FullyConnected** input){
+
+    *layer=initialize_LAYER(1);
+
+    (*layer)->input_data=(data*)malloc(sizeof(data));
+    (*layer)->output_data=(data*)malloc(sizeof(data));
+
+    (*layer)->input_data->fc=deep_fc_copy(*input);
+
+    (*layer)->kernels=(Kernels*)malloc(sizeof(Kernels*));
+
+    (*layer)->kernels->ker=NULL;
+    (*layer)->kernels->psool=NULL;
+
+    (*layer)->previous_leyer=NULL;
+    (*layer)->next_layer=NULL;
+
+}
+
+void initialize_layer_content_Block(LAYER** layer, Block** input){
 
     *layer=initialize_LAYER(1);
 
@@ -279,7 +302,7 @@ LAYER* conv_layer(paramsCONV prmconvs, Block* input){
 
     LAYER* layer;
 
-    initialize_layer_content(&layer,&input);
+    initialize_layer_content_Block(&layer,&input);
 
     Block* output;
     Blocks* kernels;
@@ -296,17 +319,38 @@ LAYER* conv_layer(paramsCONV prmconvs, Block* input){
                 prmconvs.padding);
 
 
+    //layer->input_data->block=input;
     layer->output_data->block=output;
 
     return layer;
 
     }
 
+
+LAYER* activation_layer(Block* input,double (*activation)(double)){
+
+    LAYER* layer;
+
+    initialize_layer_content_Block(&layer,&input);
+
+    current_Layer("Activation");
+    apply_function_to_Block(&input,
+                            activation
+                            );
+
+    //layer->input_data->block=input;
+    layer->output_data->block=input;
+
+    return layer;
+
+    }
+
+
 LAYER* pool_layer(paramsPOOL prmpool, Block* input){
 
     LAYER* layer;
 
-    initialize_layer_content(&layer,&input);
+    initialize_layer_content_Block(&layer,&input);
 
     Block* output;
     layer->kernels->psool=(pool_information*)malloc(sizeof(pool_information));
@@ -319,6 +363,7 @@ LAYER* pool_layer(paramsPOOL prmpool, Block* input){
                 prmpool.pooling_choice);
 
 
+    //layer->input_data->block=input;
     layer->output_data->block=output;
 
     return layer;
@@ -331,12 +376,12 @@ LAYER* flatten_layer(paramsFLATTEN prmft, Block* input){
 
     LAYER* layer;
 
-    initialize_layer_content(&layer,&input);
+    initialize_layer_content_Block(&layer,&input);
 
     Block* output;
-
     Flatten(&output,&input);
 
+    //layer->input_data->block=input;
     layer->output_data->block=output;
 
     return layer;
@@ -348,18 +393,44 @@ LAYER* fcaf_layer(paramsFCAF prmfcaf, Block* input){
 
     LAYER* layer;
 
-    initialize_layer_content(&layer,&input);
+    initialize_layer_content_Block(&layer,&input);
 
-    FullyConnected* output;
+    FullyConnected* output=initialize_Fully_Connected(1);;
 
     layer->kernels->ker=(Ker*)malloc(sizeof(Ker));
 
-    write("debut");
-    Fully_Connected_After_Flatten(&output,&input,prmfcaf.activation__,prmfcaf.output_size);
-    write("fin");
+    Fully_Connected_After_Flatten(&output,
+                                  &input,
+                                  prmfcaf.activation__,
+                                  prmfcaf.output_size);
+
+    //layer->input_data->block=input;
+    layer->kernels->ker->grid=output->weights;
+    layer->output_data->fc=output;
+
+    return layer;
+
+    }
+
+
+LAYER* fc_layer(paramsFC prmffc, FullyConnected* input){
+
+    LAYER* layer;
+
+    initialize_layer_content_fc(&layer,&input);
+
+
+    FullyConnected* output=initialize_Fully_Connected(1);;
+
+    layer->kernels->ker=(Ker*)malloc(sizeof(Ker));
+
+    Fully_Connected(&output,
+                    &input,
+                    prmffc.activation__,
+                    prmffc.output_size);
 
     layer->kernels->ker->grid=output->weights;
-    layer->output_data->grid=output->After_Activation;
+    layer->output_data->fc=output;
 
 
     return layer;
@@ -525,13 +596,63 @@ void add_FCAF(Model** model,double (*activation)(double),
     }
     else{
 
-        write("Cannot use Flattening layer at this level .. ");
+        write("Cannot use Fully Connected After Flattening layer at this level .. ");
         exit(0);
 
     }
 
     update_model(model,&fcaf_l);
     shape_grid((*model)->final_layer->output_data->grid);
+
+}
+
+void add_FC(Model** model,double (*activation)(double),
+                            unsigned int output_size){
+
+    paramsFC params_fc={name:FULLY_CONNECTED_AFTER_FLATTEN,
+                            activation__:activation,
+                            output_size:output_size};
+
+
+    LAYER* fcaf_l=initialize_LAYER(1);
+    (*model)->nbr_levels++;
+
+    if((*model)->final_layer){
+
+        fcaf_l=fc_layer(params_fc,(*model)->final_layer->output_data->fc);
+    }
+    else{
+
+        write("Cannot use Fully Connected layer at this level .. ");
+        exit(0);
+
+    }
+
+    update_model(model,&fcaf_l);
+    shape_grid((*model)->final_layer->output_data->fc->After_Activation);
+
+}
+
+void ACTIVATION(Model** model,
+                double (*activation)(double)){
+
+
+    LAYER* act_l=initialize_LAYER(1);
+    (*model)->nbr_levels++;
+
+    if((*model)->final_layer){
+
+        act_l=activation_layer((*model)->final_layer->output_data->block,activation);
+    }
+    else{
+
+        write("Cannot use Activation layer at this level .. ");
+        exit(0);
+
+    }
+
+    update_model(model,&act_l);
+    shape_grid((*model)->final_layer->output_data->block);
 
 }
 
@@ -979,6 +1100,22 @@ Block* deep_block_copy(Block* block){
 
 
     }
+
+    return aux;
+
+}
+
+FullyConnected* deep_fc_copy(FullyConnected* fc){
+
+    FullyConnected* aux=initialize_Fully_Connected(1);
+
+    aux->activation=fc->activation;
+    aux->After_Activation=deep_grid_copy(fc->After_Activation);
+    aux->Before_Activation=deep_grid_copy(fc->Before_Activation);
+    aux->bias=deep_grid_copy(fc->bias);
+    aux->current_size=fc->current_size;
+    aux->previous_size=fc->previous_size;
+    aux->weights=deep_grid_copy(fc->weights);
 
     return aux;
 
@@ -1507,7 +1644,6 @@ void Flatten(Block **output, Block **input){
 
     if(!test_block_null_dimension(*input)){
 
-
         ERROR_NULL;
         exit(0);
 
@@ -1826,6 +1962,7 @@ void Fully_Connected(FullyConnected** fc, FullyConnected** fc_input,double (*act
 }
 
 
+
 void Softmax_Activation(Grid** fc_output ,FullyConnected** fc){
 
     *fc_output=deep_grid_copy((*fc)->After_Activation);
@@ -1866,68 +2003,6 @@ void display_Grid(Grid *table){
 
 }
 
-void debug_code(){
-
-    //Creating random input
-
-
-
-    Block* input;
-    create_Block(&input,3,50,50,"random");
-
-    //Creating random kernels
-    Blocks* kernels;
-    create_Blocks(&kernels,10,3,3,3,"random");
-
-    //Covolution Layer
-    Block* input0=input;
-    Block* output0;
-    Convolution(&output0,&input,kernels,2,2);
-    shape_block(input0);
-
-    //Pooling Layer
-    Block* input1=output0;
-    Block* output1;
-    Pooling(&output1,&input1,3,2,0,"max");
-    shape_block(input1);
-
-    Blocks* kernels_bis;
-    create_Blocks(&kernels_bis,40,10,5,5,"random");
-
-    //Covolution Layer
-    Block* input2=output1;
-    Block* output2;
-    Convolution(&output2,&input2,kernels_bis,2,2);
-    shape_block(input2);
-
-    //Pooling Layer
-    Block* input3=output2;
-    Block* output3;
-    Pooling(&output3,&input3,5,2,0,"max");
-
-    Block* input4=output3;
-    Block* output4;
-    Flatten(&output4,&input4);
-    shape_block(output4);
-    //Prob au niveau de output4
-
-    FullyConnected* fc=initialize_Fully_Connected(1);
-    Fully_Connected_After_Flatten(&fc,&output4,&relu,50);
-
-    FullyConnected* fcb=initialize_Fully_Connected(1);
-    Fully_Connected(&fcb,&fc,&relu,25);
-
-    FullyConnected* fc0=initialize_Fully_Connected(1);
-    Fully_Connected(&fc0,&fc,&relu,20);
-
-    Grid* fc_activated=initialize_Grid(1);
-    Softmax_Activation(&fc_activated,&fc0);
-
-    //printf("%.10f",Sum_Grid(fc_activated));
-    printf("\nFinal Layer \n");
-    display_Grid(fc_activated);
-
-}
 
 void second_debug_code(){
 
@@ -1949,18 +2024,19 @@ void second_debug_code(){
     add_POOL(&model,2,2,3,"max");
     add_POOL(&model,1,1,5,"max");
     add_CONV(&model,100,2,2,7);
+    ACTIVATION(&model,&relu);
     add_FLAT(&model);
     add_FCAF(&model,&sigmoid,100);
-
+    add_FC(&model,&sigmoid,50);
+    add_FC(&model,&sigmoid,10);
 
 }
+
 int main()
 {
 
     //Debugging the code
-
     second_debug_code();
-
 
     printf("\nDONE :))) ! \n\n");
 
