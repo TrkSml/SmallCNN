@@ -9,9 +9,13 @@
 #include <unistd.h>
 //#include <windows.h>
 #include <ctype.h>
+#include <stdint.h>
 
+#define USE_MNIST_LOADER
+#define MNIST_DOUBLE
+#include "mnist.h"
 
-#define UPPER_BOUND .0005
+#define UPPER_BOUND 10
 #define GEN_RANDOM_SEED srand(time(NULL))
 #define DEBUG printf("debug !")
 #define ERROR_DIMENSION_CONV printf("Dimension conflict: Please review the dimensions of the convolved arrays! \n")
@@ -196,6 +200,98 @@ typedef struct {
 }Model;
 
 
+typedef struct node{
+    unsigned int index;
+    double value;
+
+}node;
+
+typedef struct pair
+{
+  node max_node;
+  node min_node;
+}pair;
+
+pair getMinMax(Grid* grid, unsigned int low, unsigned int high)
+{
+  pair pminmax, pl,pr;
+  int mid;
+
+
+  if (low == high)
+  {
+     pminmax.max_node.value = grid->grid[low][0];
+     pminmax.max_node.index = low;
+
+     pminmax.min_node.value = grid->grid[low][0];
+     pminmax.min_node.index = low;
+
+     return pminmax;
+  }
+
+
+  if (high == low + 1)
+  {
+     if (grid->grid[low][0] > grid->grid[high][0])
+     {
+
+
+        pminmax.max_node.value = grid->grid[low][0];
+        pminmax.max_node.index =low;
+
+        pminmax.min_node.value = grid->grid[high][0];
+        pminmax.min_node.index =high;
+
+
+     }
+     else
+     {
+
+        pminmax.max_node.value = grid->grid[high][0];
+        pminmax.max_node.index =high;
+
+        pminmax.min_node.value = grid->grid[low][0];
+        pminmax.min_node.index =low;
+
+     }
+     return pminmax;
+  }
+
+
+  mid = (low + high)/2;
+  pl = getMinMax(grid, low, mid);
+  pr = getMinMax(grid, mid+1, high);
+
+
+  if (pl.min_node.value < pr.min_node.value){
+
+    pminmax.min_node.value = pl.min_node.value;
+    pminmax.min_node.index=pl.min_node.index;
+  }
+
+  else{
+
+    pminmax.min_node.value = pr.min_node.value;
+    pminmax.min_node.index = pr.min_node.index;
+  }
+
+
+  if (pl.max_node.value < pr.max_node.value){
+
+    pminmax.max_node.value = pr.max_node.value;
+    pminmax.max_node.index =pr.max_node.index;
+  }
+  else{
+
+    pminmax.max_node.value = pl.max_node.value;
+    pminmax.max_node.index =pl.max_node.index;
+  }
+
+  return pminmax;
+}
+
+
+
 LAYER* initialize_LAYER(size_t size_allocation);
 LAYER** initialize_pointer_LAYER(size_t size_allocation);
 Model* initialize_Model(void);
@@ -250,14 +346,16 @@ void create_Block(Block** block,
                   unsigned int input_depth,
                   unsigned int input_height,
                   unsigned int input_width,
-                  char* choice);
+                  char* choice,
+                  char* type);
 
 void create_Blocks(Blocks **blocks,
                    unsigned int length,
                    unsigned int depth,
                    unsigned int height,
                    unsigned int width,
-                   char* choice);
+                   char* choice,
+                   char* type);
 
 
 void initialize_layer_content_fc(LAYER** layer, FullyConnected** input){
@@ -307,7 +405,7 @@ LAYER* conv_layer(paramsCONV prmconvs, Block* input){
     Block* output;
     Blocks* kernels;
 
-    create_Blocks(&kernels,prmconvs.nbr_filters, input->depth,prmconvs.kernel_size,prmconvs.kernel_size,"random");
+    create_Blocks(&kernels,prmconvs.nbr_filters, input->depth,prmconvs.kernel_size,prmconvs.kernel_size,"random","float");
 
     layer->kernels->ker=(Ker*)malloc(sizeof(Ker));
     layer->kernels->blocks=kernels;
@@ -674,7 +772,7 @@ void ACTIVATION(Model** model,
     }
 
     update_model(model,&act_l);
-    shape_grid((*model)->final_layer->output_data->block);
+    shape_block((*model)->final_layer->output_data->block);
 
 }
 
@@ -717,9 +815,17 @@ typedef struct{
 Operator Op ={add:add__,substract:substract__};
 
 
-double generate_random(){
+double generate_random(char* type){
+    if(type=="int")
+    return rand() %UPPER_BOUND;
+    if(type="float")
     return ((double)rand())/((double)RAND_MAX) * UPPER_BOUND;
+        else{
 
+        printf("Uknown type .. exiting ..");
+        exit(0);
+
+        }
 }
 
 unsigned int control_parity_kernel_size(unsigned int size_kernel){
@@ -858,14 +964,14 @@ Grid** initialize_pointer_Grid(size_t size_allocation){
 
 
 
-void create_Grid(Grid** grid,unsigned int input_height,unsigned int input_width,char* choice){
+void create_Grid(Grid** grid,unsigned int input_height,unsigned int input_width,char* choice_content, char* type){
 
     *grid=(Grid*)malloc(sizeof(Grid));
     (*grid)->height=input_height;
     (*grid)->width=input_width;
 
 
-    if(choice=="random"){
+    if(choice_content=="random"){
 
         (*grid)->grid=(double**)malloc(input_height*sizeof(double*));
        unsigned int counter_height;
@@ -875,14 +981,14 @@ void create_Grid(Grid** grid,unsigned int input_height,unsigned int input_width,
             double* row=(double*)malloc(input_width*(sizeof(double)));
 
             for(counter_width=0;counter_width<input_width;counter_width++){
-                        *(row+counter_width)=(double)generate_random();
+                        *(row+counter_width)=(double)generate_random(type);
                 }
             *((*grid)->grid+counter_height)=row;
         }
 
 
     }
-    else if(choice=="zeros"){
+    else if(choice_content=="zeros"){
 
        (*grid)->grid=(double**)malloc(input_height*sizeof(double*));
        unsigned int counter_height;
@@ -1062,7 +1168,7 @@ int test_equal_grids_dimensions(Grid* grid1, Grid* grid2){
 }
 
 
-void create_Block(Block** block,unsigned int input_depth,unsigned int input_height,unsigned int input_width,char* choice){
+void create_Block(Block** block,unsigned int input_depth,unsigned int input_height,unsigned int input_width,char* choice, char* type){
 
     *block=(Block*)malloc(sizeof(Block));
     (*block)->height=input_height;
@@ -1075,7 +1181,7 @@ void create_Block(Block** block,unsigned int input_depth,unsigned int input_heig
     for(index_depth=0;index_depth<input_depth;index_depth++){
 
         Grid* grid;
-        create_Grid(&grid,input_height,input_width,choice);
+        create_Grid(&grid,input_height,input_width,choice,type);
         *((*block)->matrix+index_depth)=grid->grid;
 
     }
@@ -1083,7 +1189,7 @@ void create_Block(Block** block,unsigned int input_depth,unsigned int input_heig
 }
 
 
-void create_Blocks(Blocks **blocks,unsigned int length,unsigned int depth,unsigned int height,unsigned int width, char* choice){
+void create_Blocks(Blocks **blocks,unsigned int length,unsigned int depth,unsigned int height,unsigned int width, char* choice, char* type){
 
     if(length<1){
 
@@ -1099,7 +1205,7 @@ void create_Blocks(Blocks **blocks,unsigned int length,unsigned int depth,unsign
 
        for(index_length=0;index_length<length;index_length++){
             Block *new_block=(Block*)malloc(sizeof(Block));
-            create_Block(&new_block,depth,height,width,choice);
+            create_Block(&new_block,depth,height,width,choice,type);
 
             *(blocks_tmp->blocks+index_length)=new_block;
        }
@@ -1314,7 +1420,7 @@ Grid* AddPadding_Grid(Grid** block, unsigned int padding){
    unsigned int width=(*block)->width;
     double **block_matrix=(*block)->grid;
 
-    create_Grid(&output_grid,height+2*padding,width+2*padding,"zeros");
+    create_Grid(&output_grid,height+2*padding,width+2*padding,"zeros","float");
 
     //double** output_grid_matrix=output_grid->grid;
 
@@ -1870,10 +1976,10 @@ void Fully_Connected_After_Flatten(FullyConnected** fc, Block** input, double (*
 
 
             local_fc->bias=(Grid*)malloc(sizeof(Grid*));
-            create_Grid(&local_fc->bias,output_layer_size,1,"zeros");
+            create_Grid(&local_fc->bias,output_layer_size,1,"zeros","float");
 
             Grid* weights_tmp;
-            create_Grid(&weights_tmp,output_layer_size,input_layer_size,"random");
+            create_Grid(&weights_tmp,output_layer_size,input_layer_size,"random","float");
 
             local_fc->weights=weights_tmp;
             local_fc->activation=*activation;
@@ -1954,10 +2060,10 @@ void Fully_Connected(FullyConnected** fc, FullyConnected** fc_input,double (*act
 
 
             local_fc->bias=(Grid*)malloc(sizeof(Grid*));
-            create_Grid(&local_fc->bias,output_layer_size,1,"zeros");
+            create_Grid(&local_fc->bias,output_layer_size,1,"zeros","float");
 
 
-            create_Grid(&weights_tmp,output_layer_size,input_layer_size,"random");
+            create_Grid(&weights_tmp,output_layer_size,input_layer_size,"random","float");
 
             local_fc->weights=weights_tmp;
             local_fc->activation=*activation;
@@ -2006,6 +2112,56 @@ void Fully_Connected(FullyConnected** fc, FullyConnected** fc_input,double (*act
 }
 
 
+double cross_entropy_sample(Grid* y_hat, Grid* y){
+
+    if(y_hat->height!=y->height){
+
+        printf("final layer must have the same true output size ..");
+        exit(0);
+    }
+
+    pair y_pair = getMinMax(y, 0, y->height-1);
+
+    unsigned int wanted_index=y_pair.max_node.index;
+
+    return -log(y_hat->grid[wanted_index][0]);
+
+    }
+
+
+Grid* fill_index(unsigned int height, unsigned int index){
+
+    Grid* output;
+    create_Grid(&output,height,1,"zeros","float");
+    output->grid[index][0]=1;
+    return output;
+
+}
+
+
+Block* to_categorical(Grid* input){
+
+    unsigned int depth=input->height;
+    unsigned int index_depth;
+
+    pair input_pair=getMinMax(input,0,input->height-1);
+
+    Block* output=initialize_Block(1);
+    output->depth=depth;
+    output->height=(unsigned int)input_pair.max_node.value;
+    output->width=1;
+
+    output->matrix=(double***)malloc(output->depth*sizeof(double**));
+
+    for(index_depth=0;index_depth<depth;index_depth++){
+
+            *(output->matrix+index_depth)=fill_index(depth,(unsigned int)input->grid[index_depth][0])->grid;
+
+    }
+
+    return output;
+
+}
 
 void Softmax_Activation(Grid** fc_output ,FullyConnected** fc){
 
@@ -2055,10 +2211,10 @@ void model_code(){
 
     //declaring the input | output
     Block* X;
-    create_Block(&X,5,80,55,"random");
+    create_Block(&X,5,80,55,"random","float");
 
     Grid* Y;
-    create_Grid(&Y,5,5,"random");
+    create_Grid(&Y,5,5,"random","int");
 
     create_Model(&model,X,Y);
 
@@ -2071,14 +2227,16 @@ void model_code(){
     add_CONV(&model,100,2,2,7);
     ACTIVATION(&model,&relu);
     add_FLAT(&model);
-    add_FCAF(&model,&sigmoid,100);
+    add_FCAF(&model,&tanh,100);
     add_FC(&model,&sigmoid,50);
-    add_FC(&model,&sigmoid,12);s
+    add_FC(&model,&sigmoid,12);
     SOFTMAX_ACTIVATION(&model);
 
     display_Grid(model->final_layer->output_data->grid);
 
 }
+
+
 int main()
 {
 
