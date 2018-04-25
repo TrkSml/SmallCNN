@@ -320,6 +320,8 @@ LAYER* initialize_LAYER(size_t size_allocation);
 LAYER** initialize_pointer_LAYER(size_t size_allocation);
 Model* initialize_Model(void);
 Block* deep_block_copy(Block* block);
+Grid* Flip_Grid(Grid* grid);
+Block* Flip_Block(Block* block);
 
 void display_Block(Block* block);
 void display_Grid(Grid* grid);
@@ -1400,9 +1402,9 @@ Grid* Extract_From_Grid(Grid* grid,\
 }
 
 
-Block* Extract_From_Block(Block* grid,\
-                         unsigned int begin_input_depth,unsigned int end_input_depth,\
-                         unsigned int begin_input_height,unsigned int end_input_height,\
+Block* Extract_From_Block(Block* grid,
+                         unsigned int begin_input_depth,unsigned int end_input_depth,
+                         unsigned int begin_input_height,unsigned int end_input_height,
                          unsigned int begin_input_width,unsigned int end_input_width){
 
 
@@ -1496,6 +1498,34 @@ Grid* Flip_Grid(Grid* grid){
     return flipped_grid;
 
 }
+
+
+Block* Flip_Block(Block* block){
+
+    Block* flipped=initialize_Block(1);
+    flipped->depth=block->depth;
+    flipped->height=block->height;
+    flipped->width=block->width;
+
+    flipped->matrix=initialize_triple_pointer_double(flipped->depth);
+
+    unsigned int index_depth;
+
+    for(index_depth=0;index_depth<flipped->depth;index_depth++){
+
+        Grid* grid=extract_grid_from_given_depth(&block,index_depth);
+        Grid* flipped_grid=Flip_Grid(grid);
+        *(flipped->matrix+index_depth)=flipped_grid->grid;
+
+        free(grid);
+        free(flipped_grid);
+
+    }
+
+    return flipped;
+
+}
+
 
 
 void AddPadding_Block(Block** block, unsigned int padding){
@@ -2291,6 +2321,7 @@ void model_code(){
     display_Grid(model->final_layer->output_data->grid);
 
 
+
 }
 
 
@@ -2298,7 +2329,7 @@ int main()
 {
 
     //Debugging the code
-    model_code();
+    //model_code();
 
 
     printf("\nDONE :))) ! \n\n");
