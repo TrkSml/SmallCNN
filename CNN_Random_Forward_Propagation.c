@@ -42,9 +42,32 @@ typedef enum{
     POOL,
     FLATTEN,
     FULLY_CONNECTED_AFTER_FLATTEN,
-    FULLY_CONNECTED
+    FULLY_CONNECTED,
+    ACTIVATION__
 
 }TYPE_LAYER;
+
+
+char* getType(TYPE_LAYER name){
+
+    switch((int)name){
+
+        case CONV :
+            "CONVOLUTION";
+        case POOL :
+            "POOLING";
+        case FLATTEN:
+            "FLATTEN";
+        case FULLY_CONNECTED_AFTER_FLATTEN:
+            "FULLY_CONNECTED_AFTER_FLATTEN";
+        case FULLY_CONNECTED:
+            "FULLY_CONNECTED";
+        case ACTIVATION__:
+            "ACTIVATION";
+    }
+
+}
+
 
 //Define parameters and then construct union over the parameters
 struct params_CONV{
@@ -181,6 +204,7 @@ typedef struct LAYER_{
     data* input_data;
     data* output_data;
     Kernels* kernels;
+    TYPE_LAYER name;
 
     struct LAYER_* next_layer;
     struct LAYER_* previous_leyer;
@@ -419,6 +443,7 @@ LAYER* conv_layer(paramsCONV prmconvs, Block* input){
 
     //layer->input_data->block=input;
     layer->output_data->block=output;
+    layer->name=prmconvs.name;
 
     return layer;
 
@@ -438,6 +463,7 @@ LAYER* activation_layer(Block* input,double (*activation)(double)){
 
     //layer->input_data->block=input;
     layer->output_data->block=input;
+    layer->name=ACTIVATION__;
 
     return layer;
 
@@ -457,6 +483,7 @@ LAYER* softmax_activation_layer(FullyConnected* input){
 
     //layer->input_data->block=input;
     layer->output_data->grid=fc_output;
+    layer->name=ACTIVATION__;
 
     return layer;
 
@@ -485,6 +512,7 @@ LAYER* pool_layer(paramsPOOL prmpool, Block* input){
 
     //layer->input_data->block=input;
     layer->output_data->block=output;
+    layer->name=prmpool.name;
 
     return layer;
 
@@ -503,6 +531,7 @@ LAYER* flatten_layer(paramsFLATTEN prmft, Block* input){
 
     //layer->input_data->block=input;
     layer->output_data->block=output;
+    layer->name=prmft.name;
 
     return layer;
 
@@ -551,6 +580,7 @@ LAYER* fc_layer(paramsFC prmffc, FullyConnected* input){
 
     layer->kernels->ker->grid=output->weights;
     layer->output_data->fc=output;
+    layer->name=prmffc.name;
 
 
     return layer;
@@ -817,9 +847,9 @@ Operator Op ={add:add__,substract:substract__};
 
 double generate_random(char* type){
     if(type=="int")
-    return rand() %UPPER_BOUND;
+    return rand() %UPPER_BOUND-UPPER_BOUND/2;
     if(type="float")
-    return ((double)rand())/((double)RAND_MAX) * UPPER_BOUND;
+    return ((double)rand())/((double)RAND_MAX) * UPPER_BOUND-UPPER_BOUND/2;
         else{
 
         printf("Uknown type .. exiting ..");
@@ -959,7 +989,7 @@ Grid* initialize_Grid(size_t size_allocation){
 
 Grid** initialize_pointer_Grid(size_t size_allocation){
 
-    return malloc(size_allocation*sizeof(Grid));
+    return malloc(size_allocation*sizeof(Grid*));
 }
 
 
@@ -1439,6 +1469,31 @@ Grid* AddPadding_Grid(Grid** block, unsigned int padding){
     }
 
     return output_grid;
+
+}
+
+Grid* Flip_Grid(Grid* grid){
+
+    Grid* flipped_grid=initialize_Grid(1);
+    flipped_grid->width=grid->width;
+    flipped_grid->height=grid->height;
+
+    flipped_grid->grid=initialize_double_pointer_double(flipped_grid->height);
+
+    unsigned int index_width, index_height;
+    for(index_height=0;index_height<flipped_grid->height;index_height++){
+
+        double* row=initialize_pointer_double(flipped_grid->width);
+        for(index_width=0;index_width<flipped_grid->width;index_width++){
+
+            *(row+index_width)=grid->grid[flipped_grid->height-index_height-1][flipped_grid->width-index_width-1];
+        }
+
+        *(flipped_grid->grid+index_height)=row;
+    }
+
+
+    return flipped_grid;
 
 }
 
@@ -2232,7 +2287,9 @@ void model_code(){
     add_FC(&model,&sigmoid,12);
     SOFTMAX_ACTIVATION(&model);
 
+
     display_Grid(model->final_layer->output_data->grid);
+
 
 }
 
@@ -2242,6 +2299,7 @@ int main()
 
     //Debugging the code
     model_code();
+
 
     printf("\nDONE :))) ! \n\n");
 
