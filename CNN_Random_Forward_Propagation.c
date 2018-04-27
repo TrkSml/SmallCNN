@@ -48,6 +48,27 @@ typedef enum{
 }TYPE_LAYER;
 
 
+char* getType(TYPE_LAYER name){
+
+    switch((int)name){
+
+        case CONV :
+            "CONVOLUTION";
+        case POOL :
+            "POOLING";
+        case FLATTEN:
+            "FLATTEN";
+        case FULLY_CONNECTED_AFTER_FLATTEN:
+            "FULLY_CONNECTED_AFTER_FLATTEN";
+        case FULLY_CONNECTED:
+            "FULLY_CONNECTED";
+        case ACTIVATION__:
+            "ACTIVATION";
+    }
+
+}
+
+
 //Define parameters and then construct union over the parameters
 struct params_CONV{
 
@@ -335,6 +356,7 @@ void Convolution(Block** bl_output,
 
 void Pooling(Block** bl_output,
              Block **input,
+             Block **cash,
              unsigned int size_kernel,
              unsigned int stride,
              unsigned int padding,
@@ -382,6 +404,7 @@ void initialize_layer_content_fc(LAYER** layer, FullyConnected** input){
     (*layer)->input_data->fc=deep_fc_copy(*input);
 
     (*layer)->kernels=(Kernels*)malloc(sizeof(Kernels*));
+    (*layer)->deltas=(Kernels*)malloc(sizeof(Kernels*));
 
     (*layer)->kernels->blocks=NULL;
     (*layer)->kernels->block=NULL;
@@ -408,6 +431,7 @@ void initialize_layer_content_Block(LAYER** layer, Block** input){
     (*layer)->input_data->block=deep_block_copy(*input);
 
     (*layer)->kernels=(Kernels*)malloc(sizeof(Kernels*));
+    (*layer)->deltas=(Kernels*)malloc(sizeof(Kernels*));
 
     (*layer)->kernels->blocks=NULL;
     (*layer)->kernels->block=NULL;
@@ -450,7 +474,7 @@ LAYER* conv_layer(paramsCONV prmconvs, Block* input){
                             prmconvs.activation__
                             );
 
-    //layer->input_data->block=input;
+    layer->input_data->block=input;
     layer->output_data->block=output;
     layer->name=prmconvs.name;
 
@@ -490,11 +514,13 @@ LAYER* pool_layer(paramsPOOL prmpool, Block* input){
     initialize_layer_content_Block(&layer,&input);
 
     Block* output;
+    Block* cash;
+
     layer->kernels->psool=(pool_information*)malloc(sizeof(pool_information));
     layer->kernels->psool->size_kernel=prmpool.kernel_size;
 
 
-    Pooling(&output,&input,
+    Pooling(&output,&input,&cash,
                 prmpool.kernel_size,
                 prmpool.stride,
                 prmpool.padding,
@@ -502,8 +528,9 @@ LAYER* pool_layer(paramsPOOL prmpool, Block* input){
 
 
     //Add a block to recognize the elements
-    //layer->deltas->block=;
 
+    display_Block(cash);
+    layer->deltas->block=cash;
     layer->output_data->block=output;
     layer->name=prmpool.name;
 
@@ -667,6 +694,7 @@ void add_CONV(Model** model, unsigned int nbr_filters,
 
     if(!(*model)->final_layer){
         conv_l=conv_layer(params_conv,(*model)->X);
+
     }
     else{
 
@@ -1001,6 +1029,7 @@ void create_Grid(Grid** grid,unsigned int input_height,unsigned int input_width,
 
 
     }
+
     else if(choice_content=="zeros"){
 
        (*grid)->grid=(double**)malloc(input_height*sizeof(double*));
@@ -1017,6 +1046,25 @@ void create_Grid(Grid** grid,unsigned int input_height,unsigned int input_width,
         }
 
     }
+
+    else if(choice_content=="ones"){
+
+       (*grid)->grid=(double**)malloc(input_height*sizeof(double*));
+       unsigned int counter_height;
+
+        for(counter_height=0;counter_height<input_height;counter_height++){
+           unsigned int counter_width;
+            double* row=(double*)malloc(input_width*(sizeof(double)));
+
+            for(counter_width=0;counter_width<input_width;counter_width++){
+                        *(row+counter_width)=1.0;
+                }
+            *((*grid)->grid+counter_height)=row;
+        }
+
+    }
+
+
 }
 
 Grid* transpose(Grid* grid_to_transpose){
@@ -1681,21 +1729,47 @@ void Convolution(Block** bl_output, Block **input, Blocks * kernels,unsigned int
 
 }
 
-double Pooling_On_Extracted_Grid(Grid* block, char* choice){
+typedef struct{
+
+    double value;
+    unsigned int index_height;
+    unsigned int index_width;
+
+}Entity;
+
+typedef struct{
+    Grid* special_grid;
+    Grid* pooled;
+
+}POOL_OUTPUT;
+
+Entity* Pooling_On_Extracted_Grid(Grid* block, char* choice){
+
    unsigned int width,height;
+   Entity* ent=(Entity*)malloc(sizeof(Entity));
 
     if(choice=="max"){
         double output=0;
 
+        unsigned int index_height;
+        unsigned int index_width;
+
         for(height=0;height<block->height;height++){
             for(width=0;width<block->width;width++){
 
+
                 output=max(output,block->grid[height][width]);
+                index_height=height;
+                index_width=width;
 
             }
         }
 
-        return output;
+        ent->value=output;
+        ent->index_height=index_height;
+        ent->index_width=index_width;
+
+        return ent;
 
     }else
     if(choice=="average"){
@@ -1710,13 +1784,17 @@ double Pooling_On_Extracted_Grid(Grid* block, char* choice){
             }
         }
 
-        return output/((block->height)*(block->width));
+        ent->value=output/((block->height)*(block->width));
+        ent->index_height=-1;
+        ent->index_width=-1;
 
+        return ent;
+
+        }
     }
-    }
 
 
-Grid* Pooling_On_Grid(Grid* grid,unsigned int size_kernel,unsigned int stride,unsigned int padding,char* choice){
+POOL_OUTPUT* Pooling_On_Grid(Grid* grid,unsigned int size_kernel,unsigned int stride,unsigned int padding,char* choice){
 
     if(!test_grid_null_dimension(grid)){
         ERROR_NULL;
@@ -1731,9 +1809,19 @@ Grid* Pooling_On_Grid(Grid* grid,unsigned int size_kernel,unsigned int stride,un
     }
     else {
 
+
+   POOL_OUTPUT* po=(POOL_OUTPUT*)malloc(sizeof(POOL_OUTPUT));
    unsigned int height=grid->height;
 
-    grid=AddPadding_Grid(&grid,padding);
+   grid=AddPadding_Grid(&grid,padding);
+   Grid* special_grid=NULL;
+
+   if(choice=="avg"){
+
+       create_Grid(&special_grid,grid->height,grid->width,"ones","float");
+       multiply_by_digit(&special_grid,1/(special_grid->height*special_grid->width));
+
+       }
 
     // We might as well add a size_output for the width
 
@@ -1747,41 +1835,63 @@ Grid* Pooling_On_Grid(Grid* grid,unsigned int size_kernel,unsigned int stride,un
    unsigned int index_height_output;
    unsigned int index_width_output;
 
-    Grid* output_convolution_grid=(Grid*)malloc(sizeof(Grid));
-    output_convolution_grid->height=(end_point_height-begin_point_height)/stride+1;
-    output_convolution_grid->width=(end_point_width-begin_point_width)/stride+1;
+    Grid* output_pooled_grid=(Grid*)malloc(sizeof(Grid));
+    output_pooled_grid->height=(end_point_height-begin_point_height)/stride+1;
+    output_pooled_grid->width=(end_point_width-begin_point_width)/stride+1;
 
-    output_convolution_grid->grid=(double**)malloc(output_convolution_grid->height*sizeof(double*));
+    output_pooled_grid->grid=(double**)malloc(output_pooled_grid->height*sizeof(double*));
+
+    if(special_grid==NULL)
+        create_Grid(&special_grid,grid->height,grid->width,"zeros","float");
+
 
     for(index_height_output=begin_point_height;index_height_output<end_point_height;index_height_output+=stride){
 
 
-        double *row=(double*)malloc(output_convolution_grid->width*sizeof(double));
+        double *row=(double*)malloc(output_pooled_grid->width*sizeof(double));
+        double *row_special=(double*)malloc(special_grid->width*sizeof(double));
+
         for(index_width_output=begin_point_width;index_width_output<end_point_width;index_width_output+=stride){
 
         Grid* extracted_grid=Extract_From_Grid(grid,index_height_output-size_half_kernel,\
                                                   index_height_output+size_half_kernel+1,index_width_output-size_half_kernel,\
                                                   index_width_output+size_half_kernel+1);
 
+        Entity* ent=Pooling_On_Extracted_Grid(extracted_grid,choice);
+        *(row+(index_width_output-begin_point_width)/stride)=0.0;
 
-        *(row+(index_width_output-begin_point_width)/stride)=Pooling_On_Extracted_Grid(extracted_grid,choice);
+        if(choice=="max"){
+            *(row+(index_width_output-begin_point_width)/stride)=ent->value;
+            special_grid->grid[index_height_output-size_half_kernel+ent->index_height]\
+                          [index_width_output-size_half_kernel+ent->index_width]\
+                           = 1.0 ;
+        }
+        else{
+
+            *(row+(index_width_output-begin_point_width)/stride)=ent->value;
 
         }
-        *(output_convolution_grid->grid+(index_height_output-begin_point_height)/stride)=row;
+
+
+        }
+        *(output_pooled_grid->grid+(index_height_output-begin_point_height)/stride)=row;
 
 
 
     }
 
 
-    return output_convolution_grid;
+    po->pooled=output_pooled_grid;
+    po->special_grid=special_grid;
+
+    return po;
 
     }
 }
 
 
 // We will continue at this level
-void Pooling(Block** bl_output,Block **input,unsigned int size_kernel,unsigned int stride,unsigned int padding, char* choice){
+void Pooling(Block** bl_output,Block **input,Block** cash, unsigned int size_kernel,unsigned int stride,unsigned int padding, char* choice){
 
     current_Layer("Pooling");
 
@@ -1793,11 +1903,19 @@ void Pooling(Block** bl_output,Block **input,unsigned int size_kernel,unsigned i
     {
 
     Block* output=(Block*)malloc(sizeof(Block));
+    Block* cash_bis=(Block*)malloc(sizeof(Block));
+
     output->height=determine_size_output((*input)->height, size_kernel, padding, stride);
     output->width=determine_size_output((*input)->width, size_kernel, padding, stride);
 
+    cash_bis->height=(*input)->height;
+    cash_bis->width=(*input)->width;
+
     output->depth=(*input)->depth;
+    cash_bis->depth=(*input)->depth;
+
     output->matrix=(double***)malloc(output->depth*sizeof(double**));
+    cash_bis->matrix=(double***)malloc(cash_bis->depth*sizeof(double**));
 
     // We have now to fill the output_matrix;
 
@@ -1809,16 +1927,15 @@ void Pooling(Block** bl_output,Block **input,unsigned int size_kernel,unsigned i
 
 
         Grid* grid_from_current_block=extract_grid_from_given_depth(input,index_output_depth);
+        POOL_OUTPUT* pooled_po=Pooling_On_Grid(grid_from_current_block,size_kernel,stride,padding,choice);
 
-        Grid* pooled_grid=Pooling_On_Grid(grid_from_current_block,size_kernel,stride,padding,choice);
-
-
-        *(output->matrix+index_output_depth)=pooled_grid->grid;
+        *(output->matrix+index_output_depth)=pooled_po->pooled->grid;
+        *(cash_bis->matrix+index_output_depth)=pooled_po->special_grid->grid;
 
 
 
        free(grid_from_current_block);
-       free(pooled_grid);
+       free(pooled_po);
 
 
     }
@@ -1826,6 +1943,7 @@ void Pooling(Block** bl_output,Block **input,unsigned int size_kernel,unsigned i
 
 
     *bl_output=output;
+    *cash=cash_bis;
 
     }
 }
@@ -2282,18 +2400,19 @@ void model_code(){
 
     //declaring the input | output
     Block* X;
-    create_Block(&X,5,80,55,"random","float");
+    create_Block(&X,5,20,20,"random","float");
 
     Grid* Y;
     create_Grid(&Y,5,5,"random","int");
 
     create_Model(&model,X,Y);
 
+
     add_CONV(&model,5,1,2,3,&relu);
-    add_POOL(&model,2,2,3,"max");
-    add_CONV(&model,10,2,2,5,&relu);
+    add_POOL(&model,2,2,3,"avg");
+    add_CONV(&model,5,2,2,5,&relu);
     add_POOL(&model,1,1,5,"max");
-    add_CONV(&model,100,2,2,7,&relu);
+    add_CONV(&model,10,2,2,7,&relu);
     add_FLAT(&model);
     add_FCAF(&model,&tanh,100);
     add_FC(&model,&sigmoid,50);
