@@ -48,27 +48,6 @@ typedef enum{
 }TYPE_LAYER;
 
 
-char* getType(TYPE_LAYER name){
-
-    switch((int)name){
-
-        case CONV :
-            "CONVOLUTION";
-        case POOL :
-            "POOLING";
-        case FLATTEN:
-            "FLATTEN";
-        case FULLY_CONNECTED_AFTER_FLATTEN:
-            "FULLY_CONNECTED_AFTER_FLATTEN";
-        case FULLY_CONNECTED:
-            "FULLY_CONNECTED";
-        case ACTIVATION__:
-            "ACTIVATION";
-    }
-
-}
-
-
 //Define parameters and then construct union over the parameters
 struct params_CONV{
 
