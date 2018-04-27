@@ -72,6 +72,7 @@ char* getType(TYPE_LAYER name){
 //Define parameters and then construct union over the parameters
 struct params_CONV{
 
+    double (*activation__)(double);
     unsigned int stride;
     unsigned int padding;
     unsigned int nbr_filters;
@@ -174,19 +175,24 @@ typedef struct{
 
 //In case we are dealing with a convolution / pooling
 typedef struct{
+
         unsigned int size_kernel;
         char* choice;
+
 }pool_information;
 
 typedef union{
+
     Block* block;
     Grid* grid;
+
 }Ker;
 
 typedef union Kernels_{
 
     pool_information* psool;
-    Ker* ker;
+    Grid* grid;
+    Block* block;
     Blocks* blocks;
 
 }Kernels;
@@ -203,7 +209,10 @@ typedef struct LAYER_{
 
     data* input_data;
     data* output_data;
+
     Kernels* kernels;
+    Kernels* deltas;
+
     TYPE_LAYER name;
 
     struct LAYER_* next_layer;
@@ -395,8 +404,15 @@ void initialize_layer_content_fc(LAYER** layer, FullyConnected** input){
 
     (*layer)->kernels=(Kernels*)malloc(sizeof(Kernels*));
 
-    (*layer)->kernels->ker=NULL;
+    (*layer)->kernels->blocks=NULL;
+    (*layer)->kernels->block=NULL;
     (*layer)->kernels->psool=NULL;
+    (*layer)->kernels->grid=NULL;
+
+    (*layer)->deltas->blocks=NULL;
+    (*layer)->deltas->block=NULL;
+    (*layer)->deltas->psool=NULL;
+    (*layer)->deltas->grid=NULL;
 
     (*layer)->previous_leyer=NULL;
     (*layer)->next_layer=NULL;
@@ -414,8 +430,15 @@ void initialize_layer_content_Block(LAYER** layer, Block** input){
 
     (*layer)->kernels=(Kernels*)malloc(sizeof(Kernels*));
 
-    (*layer)->kernels->ker=NULL;
+    (*layer)->kernels->blocks=NULL;
+    (*layer)->kernels->block=NULL;
     (*layer)->kernels->psool=NULL;
+    (*layer)->kernels->grid=NULL;
+
+    (*layer)->deltas->blocks=NULL;
+    (*layer)->deltas->block=NULL;
+    (*layer)->deltas->psool=NULL;
+    (*layer)->deltas->grid=NULL;
 
     (*layer)->previous_leyer=NULL;
     (*layer)->next_layer=NULL;
@@ -430,11 +453,13 @@ LAYER* conv_layer(paramsCONV prmconvs, Block* input){
 
     Block* output;
     Blocks* kernels;
+    Blocks* deltas;
 
     create_Blocks(&kernels,prmconvs.nbr_filters, input->depth,prmconvs.kernel_size,prmconvs.kernel_size,"random","float");
+    create_Blocks(&deltas,prmconvs.nbr_filters, input->depth,prmconvs.kernel_size,prmconvs.kernel_size,"zeros","float");
 
-    layer->kernels->ker=(Ker*)malloc(sizeof(Ker));
     layer->kernels->blocks=kernels;
+    layer->deltas->blocks=deltas;
 
     Convolution(&output,
                 &input,
@@ -442,6 +467,9 @@ LAYER* conv_layer(paramsCONV prmconvs, Block* input){
                 prmconvs.stride,
                 prmconvs.padding);
 
+    apply_function_to_Block(&output,
+                            prmconvs.activation__
+                            );
 
     //layer->input_data->block=input;
     layer->output_data->block=output;
@@ -452,26 +480,8 @@ LAYER* conv_layer(paramsCONV prmconvs, Block* input){
     }
 
 
-LAYER* activation_layer(Block* input,double (*activation)(double)){
 
-    LAYER* layer;
-
-    initialize_layer_content_Block(&layer,&input);
-
-    current_Layer("Activation");
-    apply_function_to_Block(&input,
-                            activation
-                            );
-
-    //layer->input_data->block=input;
-    layer->output_data->block=input;
-    layer->name=ACTIVATION__;
-
-    return layer;
-
-    }
-
-LAYER* softmax_activation_layer(FullyConnected* input){
+LAYER* Dense(FullyConnected* input){
 
     LAYER* layer;
 
@@ -483,7 +493,6 @@ LAYER* softmax_activation_layer(FullyConnected* input){
     Grid* fc_output;
     Softmax_Activation(&fc_output,&input);
 
-    //layer->input_data->block=input;
     layer->output_data->grid=fc_output;
     layer->name=ACTIVATION__;
 
@@ -505,6 +514,7 @@ LAYER* pool_layer(paramsPOOL prmpool, Block* input){
     layer->kernels->psool=(pool_information*)malloc(sizeof(pool_information));
     layer->kernels->psool->size_kernel=prmpool.kernel_size;
 
+
     Pooling(&output,&input,
                 prmpool.kernel_size,
                 prmpool.stride,
@@ -512,7 +522,9 @@ LAYER* pool_layer(paramsPOOL prmpool, Block* input){
                 prmpool.pooling_choice);
 
 
-    //layer->input_data->block=input;
+    //Add a block to recognize the elements
+    //layer->deltas->block=;
+
     layer->output_data->block=output;
     layer->name=prmpool.name;
 
@@ -548,15 +560,15 @@ LAYER* fcaf_layer(paramsFCAF prmfcaf, Block* input){
 
     FullyConnected* output=initialize_Fully_Connected(1);;
 
-    layer->kernels->ker=(Ker*)malloc(sizeof(Ker));
-
     Fully_Connected_After_Flatten(&output,
                                   &input,
                                   prmfcaf.activation__,
                                   prmfcaf.output_size);
 
-    //layer->input_data->block=input;
-    layer->kernels->ker->grid=output->weights;
+    Grid* deltas;
+    create_Grid(&deltas,output->weights->height,output->weights->width,"zeros","float");
+    layer->deltas->grid=deltas;
+    layer->kernels->grid=output->weights;
     layer->output_data->fc=output;
 
     return layer;
@@ -572,15 +584,16 @@ LAYER* fc_layer(paramsFC prmffc, FullyConnected* input){
 
 
     FullyConnected* output=initialize_Fully_Connected(1);;
-
-    layer->kernels->ker=(Ker*)malloc(sizeof(Ker));
-
     Fully_Connected(&output,
                     &input,
                     prmffc.activation__,
                     prmffc.output_size);
 
-    layer->kernels->ker->grid=output->weights;
+    Grid* deltas;
+    create_Grid(&deltas,output->weights->height,output->weights->width,"zeros","float");
+    layer->deltas->grid=deltas;
+
+    layer->kernels->grid=output->weights;
     layer->output_data->fc=output;
     layer->name=prmffc.name;
 
@@ -654,9 +667,21 @@ void update_model(Model** model, LAYER** layer){
 }
 
 
-void add_CONV(Model** model, unsigned int nbr_filters, unsigned int stride, unsigned int padding,unsigned int kernel_size){
+void add_CONV(Model** model, unsigned int nbr_filters,
+                             unsigned int stride,
+                             unsigned int padding,
+                             unsigned int kernel_size,
+                             double (*activation)(double)
+                            ){
 
-    paramsCONV params_conv={name:CONV, stride:stride, padding:padding, nbr_filters: nbr_filters, kernel_size:kernel_size};
+    paramsCONV params_conv={name:CONV,
+                            stride:stride,
+                            padding:padding,
+                            nbr_filters: nbr_filters,
+                            kernel_size:kernel_size,
+                            activation__:activation,
+                            };
+
     LAYER* conv_l=initialize_LAYER(1);
 
     (*model)->nbr_levels++;
@@ -710,7 +735,6 @@ void add_POOL(Model** model, unsigned int stride,
 void add_FLAT(Model** model){
 
     paramsFLATTEN params_fl={name:FLATTEN};
-
 
     LAYER* flatten_l=initialize_LAYER(1);
     (*model)->nbr_levels++;
@@ -785,8 +809,8 @@ void add_FC(Model** model,double (*activation)(double),
 
 }
 
-void ACTIVATION(Model** model,
-                double (*activation)(double)){
+
+void DENSE(Model** model){
 
 
     LAYER* act_l=initialize_LAYER(1);
@@ -794,29 +818,7 @@ void ACTIVATION(Model** model,
 
     if((*model)->final_layer){
 
-        act_l=activation_layer((*model)->final_layer->output_data->block,activation);
-    }
-    else{
-
-        write("Cannot use Activation layer at this level .. ");
-        exit(0);
-
-    }
-
-    update_model(model,&act_l);
-    shape_block((*model)->final_layer->output_data->block);
-
-}
-
-void SOFTMAX_ACTIVATION(Model** model){
-
-
-    LAYER* act_l=initialize_LAYER(1);
-    (*model)->nbr_levels++;
-
-    if((*model)->final_layer){
-
-        act_l=softmax_activation_layer((*model)->final_layer->output_data->fc);
+        act_l=Dense((*model)->final_layer->output_data->fc);
     }
     else{
 
@@ -2216,6 +2218,11 @@ double cross_entropy_sample(Grid* y_hat, Grid* y){
 
 Grid* fill_index(unsigned int height, unsigned int index){
 
+    if(index>=height){
+        printf("\nWrong index .. \n");
+        exit(0);
+    }
+
     Grid* output;
     create_Grid(&output,height,1,"zeros","float");
     output->grid[index][0]=1;
@@ -2303,24 +2310,18 @@ void model_code(){
 
     create_Model(&model,X,Y);
 
-    add_CONV(&model,5,1,2,3);
-    ACTIVATION(&model,&relu);
+    add_CONV(&model,5,1,2,3,&relu);
     add_POOL(&model,2,2,3,"max");
-    add_CONV(&model,10,2,2,5);
-    ACTIVATION(&model,&relu);
+    add_CONV(&model,10,2,2,5,&relu);
     add_POOL(&model,1,1,5,"max");
-    add_CONV(&model,100,2,2,7);
-    ACTIVATION(&model,&relu);
+    add_CONV(&model,100,2,2,7,&relu);
     add_FLAT(&model);
     add_FCAF(&model,&tanh,100);
     add_FC(&model,&sigmoid,50);
     add_FC(&model,&sigmoid,12);
-    SOFTMAX_ACTIVATION(&model);
-
+    DENSE(&model);
 
     display_Grid(model->final_layer->output_data->grid);
-
-
 
 }
 
@@ -2329,12 +2330,12 @@ int main()
 {
 
     //Debugging the code
-    //model_code();
-
+    model_code();
 
     printf("\nDONE :))) ! \n\n");
 
     return 0;
 }
+
 
 
