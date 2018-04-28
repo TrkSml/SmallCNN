@@ -73,10 +73,10 @@ char* getType(TYPE_LAYER name){
 struct params_CONV{
 
     double (*activation__)(double);
-    unsigned int stride;
-    unsigned int padding;
-    unsigned int nbr_filters;
-    unsigned int kernel_size;
+    uint32_t stride;
+    uint32_t padding;
+    uint32_t nbr_filters;
+    uint32_t kernel_size;
 
     TYPE_LAYER name;
 
@@ -85,10 +85,10 @@ struct params_CONV{
 
 struct params_POOL{
 
-    unsigned int stride;
-    unsigned int padding;
+    uint32_t stride;
+    uint32_t padding;
     char* pooling_choice;
-    unsigned int kernel_size;
+    uint32_t kernel_size;
 
     TYPE_LAYER name;
 
@@ -105,7 +105,7 @@ struct params_FLATTEN{
 struct params_FCAF{
     //Params for Fully connected after Flatten
     double (*activation__)(double);
-    unsigned int output_size;
+    uint32_t output_size;
 
     TYPE_LAYER name;
 
@@ -115,7 +115,7 @@ struct params_FCAF{
 struct params_FC{
 
     double (*activation__)(double);
-    unsigned int output_size;
+    uint32_t output_size;
 
     TYPE_LAYER name;
 
@@ -132,8 +132,8 @@ typedef struct params_FC paramsFC;
 //2D output
 //After single convolution
 typedef struct {
-   unsigned int width;
-   unsigned int height;
+   uint32_t width;
+   uint32_t height;
     double** grid;
 
 } Grid;
@@ -141,9 +141,9 @@ typedef struct {
 //3D Block for a single
 typedef struct{
 
-   unsigned int depth;
-   unsigned int width;
-   unsigned int height;
+   uint32_t depth;
+   uint32_t width;
+   uint32_t height;
     double*** matrix;
 
 }Block;
@@ -152,7 +152,7 @@ typedef struct{
 //After convolution with N filters
 typedef struct{
 
-   unsigned int length;
+   uint32_t length;
     Block** blocks;
 
 }Blocks;
@@ -161,8 +161,8 @@ typedef struct{
 
 typedef struct{
 
-    unsigned int previous_size;
-    unsigned int current_size;
+    uint32_t previous_size;
+    uint32_t current_size;
     Grid* bias;
     Grid* weights;
     Grid* Before_Activation;
@@ -176,7 +176,7 @@ typedef struct{
 //In case we are dealing with a convolution / pooling
 typedef struct{
 
-        unsigned int size_kernel;
+        uint32_t size_kernel;
         char* choice;
 
 }pool_information;
@@ -228,13 +228,13 @@ typedef struct {
 
     LAYER* first_layer;
     LAYER* final_layer;
-    unsigned int nbr_levels;
+    uint32_t nbr_levels;
 
 }Model;
 
 
 typedef struct node{
-    unsigned int index;
+    uint32_t index;
     double value;
 
 }node;
@@ -245,7 +245,7 @@ typedef struct pair
   node min_node;
 }pair;
 
-pair getMinMax(Grid* grid, unsigned int low, unsigned int high)
+pair getMinMax(Grid* grid, uint32_t low, uint32_t high)
 {
   pair pminmax, pl,pr;
   int mid;
@@ -341,7 +341,7 @@ void shape_grid(Grid* grid);
 FullyConnected* deep_fc_copy(FullyConnected* fc);
 
 unsigned int control_parity_kernel_size(unsigned int size_kernel);
-void AddPadding_Block(Block** block, unsigned int padding);
+void AddPadding_Block(Block** block, uint32_t padding);
 int test_equal_grids_dimensions(Grid* grid1, Grid* grid2);
 FullyConnected* initialize_Fully_Connected(size_t size_allocation);
 
@@ -352,15 +352,15 @@ double cross_entropy_sample(Grid* y_hat, Grid* y);
 void Convolution(Block** bl_output,
                  Block **input,
                  Blocks * kernels,
-                 unsigned int stride,
-                 unsigned int padding);
+                 uint32_t stride,
+                 uint32_t padding);
 
 void Pooling(Block** bl_output,
              Block **input,
              Block **cash,
-             unsigned int size_kernel,
-             unsigned int stride,
-             unsigned int padding,
+             uint32_t size_kernel,
+             uint32_t stride,
+             uint32_t padding,
              char* choice);
 
 void Flatten(Block **output,
@@ -380,17 +380,17 @@ void Softmax_Activation(Grid** fc_output ,
                         FullyConnected** fc);
 
 void create_Block(Block** block,
-                  unsigned int input_depth,
-                  unsigned int input_height,
-                  unsigned int input_width,
+                  uint32_t input_depth,
+                  uint32_t input_height,
+                  uint32_t input_width,
                   char* choice,
                   char* type);
 
 void create_Blocks(Blocks **blocks,
-                   unsigned int length,
-                   unsigned int depth,
-                   unsigned int height,
-                   unsigned int width,
+                   uint32_t length,
+                   uint32_t depth,
+                   uint32_t height,
+                   uint32_t width,
                    char* choice,
                    char* type);
 
@@ -674,10 +674,10 @@ void update_model(Model** model, LAYER** layer){
 }
 
 
-void add_CONV(Model** model, unsigned int nbr_filters,
-                             unsigned int stride,
-                             unsigned int padding,
-                             unsigned int kernel_size,
+void add_CONV(Model** model, uint32_t nbr_filters,
+                             uint32_t stride,
+                             uint32_t padding,
+                             uint32_t kernel_size,
                              double (*activation)(double)
                             ){
 
@@ -709,9 +709,9 @@ void add_CONV(Model** model, unsigned int nbr_filters,
 
 }
 
-void add_POOL(Model** model, unsigned int stride,
-                             unsigned int padding,
-                             unsigned int kernel_size,
+void add_POOL(Model** model, uint32_t stride,
+                             uint32_t padding,
+                             uint32_t kernel_size,
                              char* pooling_choice){
 
     paramsPOOL params_pool={name:POOL,stride:stride,
@@ -764,7 +764,7 @@ void add_FLAT(Model** model){
 }
 
 void add_FCAF(Model** model,double (*activation)(double),
-                            unsigned int output_size){
+                            uint32_t output_size){
 
     paramsFCAF params_fcaf={name:FULLY_CONNECTED_AFTER_FLATTEN,
                             activation__:activation,
@@ -791,7 +791,7 @@ void add_FCAF(Model** model,double (*activation)(double),
 }
 
 void add_FC(Model** model,double (*activation)(double),
-                            unsigned int output_size){
+                            uint32_t output_size){
 
     paramsFC params_fc={name:FULLY_CONNECTED_AFTER_FLATTEN,
                             activation__:activation,
@@ -1067,10 +1067,10 @@ void create_Grid(Grid** grid,unsigned int input_height,unsigned int input_width,
     if(choice_content=="random"){
 
         (*grid)->grid=(double**)malloc(input_height*sizeof(double*));
-       unsigned int counter_height;
+       uint32_t counter_height;
 
         for(counter_height=0;counter_height<input_height;counter_height++){
-           unsigned int counter_width;
+           uint32_t counter_width;
             double* row=(double*)malloc(input_width*(sizeof(double)));
 
             for(counter_width=0;counter_width<input_width;counter_width++){
@@ -1085,10 +1085,10 @@ void create_Grid(Grid** grid,unsigned int input_height,unsigned int input_width,
     else if(choice_content=="zeros"){
 
        (*grid)->grid=(double**)malloc(input_height*sizeof(double*));
-       unsigned int counter_height;
+       uint32_t counter_height;
 
         for(counter_height=0;counter_height<input_height;counter_height++){
-           unsigned int counter_width;
+           uint32_t counter_width;
             double* row=(double*)malloc(input_width*(sizeof(double)));
 
             for(counter_width=0;counter_width<input_width;counter_width++){
@@ -1102,10 +1102,10 @@ void create_Grid(Grid** grid,unsigned int input_height,unsigned int input_width,
     else if(choice_content=="ones"){
 
        (*grid)->grid=(double**)malloc(input_height*sizeof(double*));
-       unsigned int counter_height;
+       uint32_t counter_height;
 
         for(counter_height=0;counter_height<input_height;counter_height++){
-           unsigned int counter_width;
+           uint32_t counter_width;
             double* row=(double*)malloc(input_width*(sizeof(double)));
 
             for(counter_width=0;counter_width<input_width;counter_width++){
@@ -1125,7 +1125,7 @@ Grid* transpose(Grid* grid_to_transpose){
     transposed_grid->height=grid_to_transpose->width;
     transposed_grid->width=grid_to_transpose->height;
 
-    unsigned int index_heigth, index_width;
+    uint32_t index_heigth, index_width;
     transposed_grid->grid=(double**)malloc(transposed_grid->height*sizeof(double*));
 
     for(index_heigth=0;index_heigth<transposed_grid->height;index_heigth++){
@@ -1144,7 +1144,7 @@ Grid* transpose(Grid* grid_to_transpose){
 double Sum_Grid(Grid* grid){
 
     double output=0.;
-    unsigned int index_width, index_height;
+    uint32_t index_width, index_height;
 
    for(index_height=0;index_height<grid->height;index_height++){
             for(index_width=0;index_width<grid->width;index_width++){
@@ -1160,7 +1160,7 @@ double Sum_Grid(Grid* grid){
 
 void multiply_by_digit(Grid** grid, double digit){
 
-    unsigned int index_width, index_height;
+    uint32_t index_width, index_height;
 
    for(index_height=0;index_height<(*grid)->height;index_height++){
             for(index_width=0;index_width<(*grid)->width;index_width++){
@@ -1179,7 +1179,7 @@ Grid* deep_grid_copy(Grid* grid){
     aux->width=grid->width;
     aux->grid=initialize_double_pointer_double(aux->height);
 
-    unsigned int row,col;
+    uint32_t row,col;
 
     for(row=0;row<aux->height;row++){
         double *row_ptr=(double*)malloc(aux->width*sizeof(double));
@@ -1211,7 +1211,7 @@ Grid* Operate(Grid* grid1, Grid* grid2, char* choice){
         output->width=grid1->width;
         output->grid=grid1->grid;
 
-        unsigned int index_width, index_height;
+        uint32_t index_width, index_height;
 
         for(index_height=0;index_height<output->height;index_height++){
             for(index_width=0;index_width<output->width;index_width++){
@@ -1297,7 +1297,7 @@ void create_Block(Block** block,unsigned int input_depth,unsigned int input_heig
 
     (*block)->matrix=(double***)malloc(input_depth*sizeof(double**));
 
-   unsigned int index_depth;
+   uint32_t index_depth;
     for(index_depth=0;index_depth<input_depth;index_depth++){
 
         Grid* grid;
@@ -1321,7 +1321,7 @@ void create_Blocks(Blocks **blocks,unsigned int length,unsigned int depth,unsign
        *blocks=(Blocks *)malloc(sizeof(Blocks));
        Blocks* blocks_tmp=*blocks;
        blocks_tmp->blocks=malloc(length*sizeof(Block));
-      unsigned int index_length;
+      uint32_t index_length;
 
        for(index_length=0;index_length<length;index_length++){
             Block *new_block=(Block*)malloc(sizeof(Block));
@@ -1335,7 +1335,7 @@ void create_Blocks(Blocks **blocks,unsigned int length,unsigned int depth,unsign
     }
 }
 
-Grid* extract_grid_from_given_depth(Block** block, unsigned int index_depth){
+Grid* extract_grid_from_given_depth(Block** block, uint32_t index_depth){
 
     Grid* current_depth=(Grid*)malloc(sizeof(Grid));
 
@@ -1410,7 +1410,7 @@ void apply_function_to_Grid(Grid** grid, double (*pointer_to_function)(double)){
 
 void apply_function_to_Grid_softmax(Grid** grid, double (*pointer_to_function)(double)){
 
-    unsigned int index_width,index_height;
+    uint32_t index_width,index_height;
     Grid* to_exponential=*grid;
     apply_function_to_Grid(&to_exponential,&exp);
 
@@ -1453,26 +1453,26 @@ void apply_function_to_Block(Block** block, double (*pointer_to_function)(double
 
 //Extract a smaller Grid From a Grid
 Grid* Extract_From_Grid(Grid* grid,\
-                         unsigned int begin_input_height,unsigned int end_input_height,\
-                         unsigned int begin_input_width,unsigned int end_input_width){
+                         uint32_t begin_input_height,unsigned int end_input_height,\
+                         uint32_t begin_input_width,unsigned int end_input_width){
 
     Grid* output_grid=(Grid*)malloc(sizeof(Grid));
 
-   unsigned int size_height=end_input_height-begin_input_height;
-   unsigned int size_width=end_input_width-begin_input_width;
+   uint32_t size_height=end_input_height-begin_input_height;
+   uint32_t size_width=end_input_width-begin_input_width;
 
     output_grid->width=size_width;
     output_grid->height=size_height;
 
     output_grid->grid=(double**)malloc(output_grid->height*sizeof(double*));
 
-   unsigned int counter_height;
-   unsigned int new_counter_height=0;
+   uint32_t counter_height;
+   uint32_t new_counter_height=0;
 
     for(counter_height=begin_input_height;counter_height<end_input_height;counter_height++){
 
-       unsigned int counter_width;
-       unsigned int new_counter_width=0;
+       uint32_t counter_width;
+       uint32_t new_counter_width=0;
         double* row=(double*)malloc(output_grid->width*(sizeof(double)));
 
         for(counter_width=begin_input_width;counter_width<end_input_width;counter_width++){
@@ -1491,16 +1491,16 @@ Grid* Extract_From_Grid(Grid* grid,\
 
 
 Block* Extract_From_Block(Block* grid,
-                         unsigned int begin_input_depth,unsigned int end_input_depth,
-                         unsigned int begin_input_height,unsigned int end_input_height,
-                         unsigned int begin_input_width,unsigned int end_input_width){
+                         uint32_t begin_input_depth,unsigned int end_input_depth,
+                         uint32_t begin_input_height,unsigned int end_input_height,
+                         uint32_t begin_input_width,unsigned int end_input_width){
 
 
     Block* output_grid=(Block*)malloc(sizeof(Block));
 
-   unsigned int size_depth=end_input_depth-begin_input_depth;
-   unsigned int size_height=end_input_height-begin_input_height;
-   unsigned int size_width=end_input_width-begin_input_width;
+   uint32_t size_depth=end_input_depth-begin_input_depth;
+   uint32_t size_height=end_input_height-begin_input_height;
+   uint32_t size_width=end_input_width-begin_input_width;
 
     output_grid->depth=size_depth;
     output_grid->width=size_width;
@@ -1508,8 +1508,8 @@ Block* Extract_From_Block(Block* grid,
 
     output_grid->matrix=(double***)malloc(size_depth*sizeof(double**));
 
-   unsigned int counter_depth;
-   unsigned int new_counter_depth=0;
+   uint32_t counter_depth;
+   uint32_t new_counter_depth=0;
 
     for(counter_depth=begin_input_depth;counter_depth<end_input_depth;counter_depth++){
 
@@ -1532,20 +1532,20 @@ Block* Extract_From_Block(Block* grid,
 }
 
 
-Grid* AddPadding_Grid(Grid** block, unsigned int padding){
+Grid* AddPadding_Grid(Grid** block, uint32_t padding){
 
     Grid* output_grid;
 
-   unsigned int height=(*block)->height;
-   unsigned int width=(*block)->width;
+   uint32_t height=(*block)->height;
+   uint32_t width=(*block)->width;
     double **block_matrix=(*block)->grid;
 
     create_Grid(&output_grid,height+2*padding,width+2*padding,"zeros","float");
 
     //double** output_grid_matrix=output_grid->grid;
 
-   unsigned int counter_height;
-   unsigned int counter_width;
+   uint32_t counter_height;
+   uint32_t counter_width;
 
 
         for(counter_height=padding;counter_height<padding+height;counter_height++){
@@ -1570,7 +1570,7 @@ Grid* Flip_Grid(Grid* grid){
 
     flipped_grid->grid=initialize_double_pointer_double(flipped_grid->height);
 
-    unsigned int index_width, index_height;
+    uint32_t index_width, index_height;
     for(index_height=0;index_height<flipped_grid->height;index_height++){
 
         double* row=initialize_pointer_double(flipped_grid->width);
@@ -1597,7 +1597,7 @@ Block* Flip_Block(Block* block){
 
     flipped->matrix=initialize_triple_pointer_double(flipped->depth);
 
-    unsigned int index_depth;
+    uint32_t index_depth;
 
     for(index_depth=0;index_depth<flipped->depth;index_depth++){
 
@@ -1616,7 +1616,7 @@ Block* Flip_Block(Block* block){
 
 
 
-void AddPadding_Block(Block** block, unsigned int padding){
+void AddPadding_Block(Block** block, uint32_t padding){
 
     Block *output_Block=(Block*)malloc(sizeof(Block));
 
@@ -1627,7 +1627,7 @@ void AddPadding_Block(Block** block, unsigned int padding){
     output_Block->matrix=(double***)malloc(output_Block->depth*sizeof(double**));
 
 
-   unsigned int counter_depth;
+   uint32_t counter_depth;
 
     for(counter_depth=0;counter_depth<output_Block->depth;counter_depth++){
 
@@ -1645,7 +1645,7 @@ void AddPadding_Block(Block** block, unsigned int padding){
 }
 
 double convolve_multiplication_sum(Block* block1, Block* block2){
-   unsigned int depth,width,height;
+   uint32_t depth,width,height;
 
     if(!test_equal_blocks_dimensions(block1,block2)){
 
@@ -1697,19 +1697,19 @@ Grid* convolve(Block* block, Block* kernel,unsigned int stride,unsigned int padd
         }
         else{
 
-       unsigned int height=block->height;
+       uint32_t height=block->height;
 
         AddPadding_Block(&block,padding);
 
-       unsigned int size_half_kernel=((kernel->height-1)/2);
-       unsigned int begin_point_height=size_half_kernel;
-       unsigned int end_point_height=block->height-begin_point_height;
+       uint32_t size_half_kernel=((kernel->height-1)/2);
+       uint32_t begin_point_height=size_half_kernel;
+       uint32_t end_point_height=block->height-begin_point_height;
 
-       unsigned int begin_point_width=size_half_kernel;
-       unsigned int end_point_width=block->width-begin_point_width;
+       uint32_t begin_point_width=size_half_kernel;
+       uint32_t end_point_width=block->width-begin_point_width;
 
-       unsigned int index_height_output;
-       unsigned int index_width_output;
+       uint32_t index_height_output;
+       uint32_t index_width_output;
 
         Grid* output_convolution_grid=(Grid*)malloc(sizeof(Grid));
         output_convolution_grid->height=(int)(end_point_height-begin_point_height)/stride+1;
@@ -1773,7 +1773,7 @@ void Convolution(Block** bl_output, Block **input, Blocks * kernels,unsigned int
 
         // We have now to fill the output_matrix;
 
-       unsigned int index_output_depth;
+       uint32_t index_output_depth;
 
         for(index_output_depth=0;index_output_depth<output->depth;index_output_depth++){
 
@@ -1792,8 +1792,8 @@ void Convolution(Block** bl_output, Block **input, Blocks * kernels,unsigned int
 typedef struct{
 
     double value;
-    unsigned int index_height;
-    unsigned int index_width;
+    uint32_t index_height;
+    uint32_t index_width;
 
 }Entity;
 
@@ -1810,10 +1810,10 @@ Entity* Pooling_On_Extracted_Grid(Grid* block, char* choice){
     if(choice=="max"){
         double output=0;
 
-        unsigned int width,height;
+        uint32_t width,height;
 
-        unsigned int index_height=0;
-        unsigned int index_width=0;
+        uint32_t index_height=0;
+        uint32_t index_width=0;
 
         for(height=0;height<block->height;height++){
             for(width=0;width<block->width;width++){
@@ -1838,7 +1838,7 @@ Entity* Pooling_On_Extracted_Grid(Grid* block, char* choice){
     if(choice=="average"){
 
         //// Let us see
-        unsigned int width,height;
+        uint32_t width,height;
 
         double output=0;
 
@@ -1877,7 +1877,7 @@ POOL_OUTPUT* Pooling_On_Grid(Grid* grid,unsigned int size_kernel,unsigned int st
 
 
    POOL_OUTPUT* po=(POOL_OUTPUT*)malloc(sizeof(POOL_OUTPUT));
-   unsigned int height=grid->height;
+   uint32_t height=grid->height;
 
    grid=AddPadding_Grid(&grid,padding);
    Grid* special_grid=NULL;
@@ -1891,15 +1891,15 @@ POOL_OUTPUT* Pooling_On_Grid(Grid* grid,unsigned int size_kernel,unsigned int st
 
     // We might as well add a size_output for the width
 
-   unsigned int size_half_kernel=((size_kernel-1)/2);
-   unsigned int begin_point_height=size_half_kernel;
-   unsigned int end_point_height=grid->height-begin_point_height;
+   uint32_t size_half_kernel=((size_kernel-1)/2);
+   uint32_t begin_point_height=size_half_kernel;
+   uint32_t end_point_height=grid->height-begin_point_height;
 
-   unsigned int begin_point_width=size_half_kernel;
-   unsigned int end_point_width=grid->width-begin_point_width;
+   uint32_t begin_point_width=size_half_kernel;
+   uint32_t end_point_width=grid->width-begin_point_width;
 
-   unsigned int index_height_output;
-   unsigned int index_width_output;
+   uint32_t index_height_output;
+   uint32_t index_width_output;
 
     Grid* output_pooled_grid=(Grid*)malloc(sizeof(Grid));
     output_pooled_grid->height=(end_point_height-begin_point_height)/stride+1;
@@ -1958,7 +1958,7 @@ POOL_OUTPUT* Pooling_On_Grid(Grid* grid,unsigned int size_kernel,unsigned int st
 
 
 // We will continue at this level
-void Pooling(Block** bl_output,Block **input,Block** cash, unsigned int size_kernel,unsigned int stride,unsigned int padding, char* choice){
+void Pooling(Block** bl_output,Block **input,Block** cash, uint32_t size_kernel,unsigned int stride,unsigned int padding, char* choice){
 
     current_Layer("Pooling");
 
@@ -1988,7 +1988,7 @@ void Pooling(Block** bl_output,Block **input,Block** cash, unsigned int size_ker
 
 
 
-   unsigned int index_output_depth;
+   uint32_t index_output_depth;
 
     for(index_output_depth=0;index_output_depth<output->depth;index_output_depth++){
 
@@ -2026,7 +2026,7 @@ void extract_Grid_From_Flatten_Block(Block** block, Grid** grid){
     (*grid)->grid=(double**)malloc(sizeof(double*));
     double* row=(double*)malloc((*grid)->width*sizeof(double));
 
-    unsigned int index_depth;
+    uint32_t index_depth;
     for(index_depth=0;index_depth<(*grid)->width;index_depth++){
 
         *(row+index_depth)=(*block)->matrix[index_depth][0][0];
@@ -2059,11 +2059,11 @@ void Flatten(Block **output, Block **input){
 
    double*** Flattened=(double***)malloc(block->depth*sizeof(double**));
 
-   unsigned int index_depth;
-   unsigned int index_height;
-   unsigned int index_width;
+   uint32_t index_depth;
+   uint32_t index_height;
+   uint32_t index_width;
 
-   unsigned int counter_array_flattened=0;
+   uint32_t counter_array_flattened=0;
 
     for(index_depth=0;index_depth<(*input)->depth;index_depth++){
 
@@ -2097,7 +2097,7 @@ void Flatten(Block **output, Block **input){
 
 void Stack_Blocks(int nbr_arguments,... ){
 
-   unsigned int i;
+   uint32_t i;
     va_list argptr;
     /* initialize argptr for nbr_arguments number of arguments */
     va_start(argptr, nbr_arguments);
@@ -2168,7 +2168,7 @@ void Fully_Connected_After_Flatten(FullyConnected** fc, Block** input, double (*
 
     current_Layer("Fully Connected");
 
-    unsigned int input_layer_size=(*input)->depth;
+    uint32_t input_layer_size=(*input)->depth;
 
     Grid* weights_tmp;
     Grid* Z_i;
@@ -2253,7 +2253,7 @@ void Fully_Connected(FullyConnected** fc, FullyConnected** fc_input,double (*act
 
     current_Layer("Fully Connected");
 
-    unsigned int input_layer_size=(*fc_input)->current_size;
+    uint32_t input_layer_size=(*fc_input)->current_size;
     Grid* weights_tmp;
     Grid* Z_i;
     Grid* A_i;
@@ -2337,14 +2337,14 @@ double cross_entropy_sample(Grid* y_hat, Grid* y){
 
     pair y_pair = getMinMax(y, 0, y->height-1);
 
-    unsigned int wanted_index=y_pair.max_node.index;
+    uint32_t wanted_index=y_pair.max_node.index;
 
     return -log(y_hat->grid[wanted_index][0]);
 
     }
 
 
-Grid* fill_index(unsigned int height, unsigned int index){
+Grid* fill_index(unsigned int height, uint32_t index){
 
     if(index>=height){
         printf("\nWrong index .. \n");
@@ -2361,8 +2361,8 @@ Grid* fill_index(unsigned int height, unsigned int index){
 
 Block* to_categorical(Grid* input){
 
-    unsigned int depth=input->height;
-    unsigned int index_depth;
+    uint32_t depth=input->height;
+    uint32_t index_depth;
 
     pair input_pair=getMinMax(input,0,input->height-1);
 
@@ -2393,7 +2393,7 @@ void Softmax_Activation(Grid** fc_output ,FullyConnected** fc){
 
 void display_Block(Block* grid){
 
-   unsigned int dpth,row,col;
+   uint32_t dpth,row,col;
 
     for(dpth=0;dpth<grid->depth;dpth++){
         printf("Level : %d\n",dpth+1);
@@ -2410,7 +2410,7 @@ void display_Block(Block* grid){
 
 
 void display_Grid(Grid *table){
-   unsigned int row,col;
+   uint32_t row,col;
 
     for(row=0;row<table->height;row++){
         for(col=0;col<table->width;col++){
@@ -2426,7 +2426,6 @@ void display_Grid(Grid *table){
 
 void model_code(){
 
-
     Model* model;
 
     //declaring the input | output
@@ -2437,7 +2436,6 @@ void model_code(){
     //create_Grid(&Y,5,5,"random","int");
 
     create_Model(&model,X,Y);
-
 
     add_CONV(&model,3,1,2,3,&relu);
     add_POOL(&model,2,2,3,"max");
