@@ -220,6 +220,20 @@ typedef struct LAYER_{
 
 }LAYER;
 
+typedef struct{
+
+    double value;
+    unsigned int index_height;
+    unsigned int index_width;
+
+}Entity;
+
+typedef struct{
+    Grid* special_grid;
+    Grid* pooled;
+
+}POOL_OUTPUT;
+
 
 typedef struct {
 
@@ -347,6 +361,7 @@ FullyConnected* initialize_Fully_Connected(size_t size_allocation);
 
 double relu(double x);
 double sigmoid(double x);
+double cross_entropy_sample(Grid* y_hat, Grid* y);
 
 void Convolution(Block** bl_output,
                  Block **input,
@@ -839,6 +854,13 @@ void DENSE(Model** model){
 
 }
 
+void fit(Model** model){
+
+    double error=cross_entropy_sample((*model)->final_layer->output_data->grid,(*model)->Y);
+
+
+}
+
 
 double add__(double a, double b){
     return a+b;
@@ -848,12 +870,17 @@ double substract__(double a, double b){
     return a-b;
 }
 
+double multiply__(double a, double b){
+    return a-b;
+}
+
 typedef struct{
     double (*add)(double,double);
     double (*substract)(double,double);
+    double (*multiply)(double,double);
 }Operator;
 
-Operator Op ={add:add__,substract:substract__};
+Operator Op ={add:add__,substract:substract__,multiply:multiply__};
 
 
 double generate_random(char* type){
@@ -883,8 +910,24 @@ double relu(double x){
     return max(0,x);
 }
 
+double deriv_relu(double x){
+
+    return 0*(x<=0)+1*(x>0);
+
+}
+
 double sigmoid(double x){
+
    return 1./(1.+exp(-x));
+}
+
+double deriv_sigmoid(double x){
+    return sigmoid(x)*(1-sigmoid(x));
+}
+
+double deriv_tanh(double x){
+
+    return 1-pow(tanh(x),2);
 }
 
 
@@ -1173,6 +1216,13 @@ Grid* Operate(Grid* grid1, Grid* grid2, char* choice){
                 if(choice=="-")
                 {
                 output->grid[index_height][index_width]=Op.substract(output->grid[index_height][index_width],\
+                                                                grid2->grid[index_height][index_width]);
+                }
+                else
+                if(choice=="*")
+                {
+
+                output->grid[index_height][index_width]=Op.multiply(output->grid[index_height][index_width],\
                                                                 grid2->grid[index_height][index_width]);
                 }
                 else{
@@ -1715,6 +1765,7 @@ void Convolution(Block** bl_output, Block **input, Blocks * kernels,unsigned int
         // We have now to fill the output_matrix;
 
        unsigned int index_output_depth;
+
         for(index_output_depth=0;index_output_depth<output->depth;index_output_depth++){
 
 
@@ -1729,38 +1780,28 @@ void Convolution(Block** bl_output, Block **input, Blocks * kernels,unsigned int
 
 }
 
-typedef struct{
-
-    double value;
-    unsigned int index_height;
-    unsigned int index_width;
-
-}Entity;
-
-typedef struct{
-    Grid* special_grid;
-    Grid* pooled;
-
-}POOL_OUTPUT;
 
 Entity* Pooling_On_Extracted_Grid(Grid* block, char* choice){
 
-   unsigned int width,height;
    Entity* ent=(Entity*)malloc(sizeof(Entity));
 
     if(choice=="max"){
         double output=0;
 
-        unsigned int index_height;
-        unsigned int index_width;
+        unsigned int width,height;
+
+        unsigned int index_height=0;
+        unsigned int index_width=0;
 
         for(height=0;height<block->height;height++){
             for(width=0;width<block->width;width++){
 
 
-                output=max(output,block->grid[height][width]);
-                index_height=height;
-                index_width=width;
+                if(output<block->grid[height][width]){
+                    output=block->grid[height][width];
+                    index_height=height;
+                    index_width=width;
+                }
 
             }
         }
@@ -1775,7 +1816,10 @@ Entity* Pooling_On_Extracted_Grid(Grid* block, char* choice){
     if(choice=="average"){
 
         //// Let us see
+        unsigned int width,height;
+
         double output=0;
+
         for(height=0;height<block->height;height++){
             for(width=0;width<block->width;width++){
 
@@ -1849,7 +1893,6 @@ POOL_OUTPUT* Pooling_On_Grid(Grid* grid,unsigned int size_kernel,unsigned int st
 
 
         double *row=(double*)malloc(output_pooled_grid->width*sizeof(double));
-        double *row_special=(double*)malloc(special_grid->width*sizeof(double));
 
         for(index_width_output=begin_point_width;index_width_output<end_point_width;index_width_output+=stride){
 
@@ -1861,9 +1904,11 @@ POOL_OUTPUT* Pooling_On_Grid(Grid* grid,unsigned int size_kernel,unsigned int st
         *(row+(index_width_output-begin_point_width)/stride)=0.0;
 
         if(choice=="max"){
+            printf("\n%d | %d\n",ent->index_height,ent->index_width);
             *(row+(index_width_output-begin_point_width)/stride)=ent->value;
-            special_grid->grid[index_height_output-size_half_kernel+ent->index_height]\
-                          [index_width_output-size_half_kernel+ent->index_width]\
+
+            special_grid->grid[index_height_output-size_half_kernel+ent->index_height]
+                          [index_width_output-size_half_kernel+ent->index_width]
                            = 1.0 ;
         }
         else{
@@ -2095,42 +2140,6 @@ void grid_dot_mutiplication(Grid** output_grid, Grid** grid1, Grid** grid2){
         }
 
 }
-
-
-void grid_element_wise_mutiplication(Grid** output_grid, Grid** grid1, Grid** grid2){
-
-    if(!test_for_grid_elementwise_multiplication(*grid1,*grid2)){
-
-        ERROR_DIMENSION_GRID_MULT;
-        exit(0);
-
-    }
-    else{
-
-        *output_grid=(Grid*)malloc(sizeof(Grid));
-        (*output_grid)->height=(*grid1)->height;
-        (*output_grid)->width=(*grid1)->width;
-        (*output_grid)->grid=(double**)malloc((*output_grid)->height*sizeof(double*));
-
-        int index_height, index_width;
-
-        for(index_height=0;index_height<(*output_grid)->height;index_height++){
-
-            double* row=(double*)malloc((*output_grid)->height*sizeof(double));
-
-            for(index_width=0;index_width<(*output_grid)->width;index_width++){
-
-                *(row+index_width)=(*grid1)->grid[index_height][index_width]*((*grid2)->grid[index_height][index_width]);
-
-            }
-            *((*output_grid)->grid+index_height)=row;
-
-        }
-
-    }
-
-}
-
 
 
 void Fully_Connected_After_Flatten(FullyConnected** fc, Block** input, double (*activation)(double), int output_layer_size){
@@ -2400,16 +2409,16 @@ void model_code(){
 
     //declaring the input | output
     Block* X;
-    create_Block(&X,5,20,20,"random","float");
+    create_Block(&X,3,15,15,"random","float");
 
-    Grid* Y;
-    create_Grid(&Y,5,5,"random","int");
+    Grid* Y=fill_index(12,2);
+    //create_Grid(&Y,5,5,"random","int");
 
     create_Model(&model,X,Y);
 
 
-    add_CONV(&model,5,1,2,3,&relu);
-    add_POOL(&model,2,2,3,"avg");
+    add_CONV(&model,3,1,2,3,&relu);
+    add_POOL(&model,2,2,3,"max");
     add_CONV(&model,5,2,2,5,&relu);
     add_POOL(&model,1,1,5,"max");
     add_CONV(&model,10,2,2,7,&relu);
@@ -2419,7 +2428,8 @@ void model_code(){
     add_FC(&model,&sigmoid,12);
     DENSE(&model);
 
-    display_Grid(model->final_layer->output_data->grid);
+    fit(&model);
+    //display_Grid(model->final_layer->output_data->grid);
 
 }
 
