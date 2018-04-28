@@ -220,20 +220,6 @@ typedef struct LAYER_{
 
 }LAYER;
 
-typedef struct{
-
-    double value;
-    unsigned int index_height;
-    unsigned int index_width;
-
-}Entity;
-
-typedef struct{
-    Grid* special_grid;
-    Grid* pooled;
-
-}POOL_OUTPUT;
-
 
 typedef struct {
 
@@ -874,37 +860,8 @@ double multiply__(double a, double b){
     return a-b;
 }
 
-typedef struct{
-    double (*add)(double,double);
-    double (*substract)(double,double);
-    double (*multiply)(double,double);
-}Operator;
-
-Operator Op ={add:add__,substract:substract__,multiply:multiply__};
 
 
-double generate_random(char* type){
-    if(type=="int")
-    return rand() %UPPER_BOUND-UPPER_BOUND/2;
-    if(type="float")
-    return ((double)rand())/((double)RAND_MAX) * UPPER_BOUND-UPPER_BOUND/2;
-        else{
-
-        printf("Uknown type .. exiting ..");
-        exit(0);
-
-        }
-}
-
-unsigned int control_parity_kernel_size(unsigned int size_kernel){
-    return size_kernel%2==1;
-}
-
-
-unsigned int determine_size_output(int input_height,unsigned int kernel_height,unsigned int padding,unsigned int stride){
-
-     return (int)(((input_height-kernel_height+2*padding)/stride))+1;
-}
 
 double relu(double x){
     return max(0,x);
@@ -929,6 +886,58 @@ double deriv_tanh(double x){
 
     return 1-pow(tanh(x),2);
 }
+
+
+typedef struct{
+    double (*add)(double,double);
+    double (*substract)(double,double);
+    double (*multiply)(double,double);
+}Operator;
+
+typedef struct{
+    double (*function)(double);
+    double (*prime)(double);
+
+}Object;
+
+Operator Op ={add:add__,substract:substract__,multiply:multiply__};
+
+Object Tanh_Ojb={function:tanh, prime:deriv_tanh};
+Object Sigm_Obj={function:sigmoid, prime:deriv_sigmoid};
+Object Relu_Obj={function:relu, prime:deriv_relu};
+
+Object function_to_object(double (*function)(double)){
+
+    if(function==tanh) return Tanh_Ojb;
+    if(function==sigmoid) return Sigm_Obj;
+    if(function==relu) return Relu_Obj;
+
+}
+
+double generate_random(char* type){
+    if(type=="int")
+    return rand() %UPPER_BOUND-UPPER_BOUND/2;
+    if(type="float")
+    return ((double)rand())/((double)RAND_MAX) * UPPER_BOUND-UPPER_BOUND/2;
+        else{
+
+        printf("Uknown type .. exiting ..");
+        exit(0);
+
+        }
+}
+
+unsigned int control_parity_kernel_size(unsigned int size_kernel){
+    return size_kernel%2==1;
+}
+
+
+unsigned int determine_size_output(int input_height,unsigned int kernel_height,unsigned int padding,unsigned int stride){
+
+     return (int)(((input_height-kernel_height+2*padding)/stride))+1;
+}
+
+
 
 
 void shape_block(Block* block){
@@ -1780,6 +1789,19 @@ void Convolution(Block** bl_output, Block **input, Blocks * kernels,unsigned int
 
 }
 
+typedef struct{
+
+    double value;
+    unsigned int index_height;
+    unsigned int index_width;
+
+}Entity;
+
+typedef struct{
+    Grid* special_grid;
+    Grid* pooled;
+
+}POOL_OUTPUT;
 
 Entity* Pooling_On_Extracted_Grid(Grid* block, char* choice){
 
@@ -1904,7 +1926,7 @@ POOL_OUTPUT* Pooling_On_Grid(Grid* grid,unsigned int size_kernel,unsigned int st
         *(row+(index_width_output-begin_point_width)/stride)=0.0;
 
         if(choice=="max"){
-            printf("\n%d | %d\n",ent->index_height,ent->index_width);
+
             *(row+(index_width_output-begin_point_width)/stride)=ent->value;
 
             special_grid->grid[index_height_output-size_half_kernel+ent->index_height]
