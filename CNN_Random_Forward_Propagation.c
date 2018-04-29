@@ -248,7 +248,7 @@ typedef struct pair
 pair getMinMax(Grid* grid, uint32_t low, uint32_t high)
 {
   pair pminmax, pl,pr;
-  int mid;
+  uint32_t mid;
 
 
   if (low == high)
@@ -369,12 +369,12 @@ void Flatten(Block **output,
 void Fully_Connected_After_Flatten(FullyConnected** fc,
                                    Block** input,
                                    double (*activation)(double),
-                                    int output_layer_size);
+                                   uint32_t output_layer_size);
 
 void Fully_Connected(FullyConnected** fc,
                      FullyConnected** fc_input,
                      double (*activation)(double),
-                     int output_layer_size);
+                     uint32_t output_layer_size);
 
 void Softmax_Activation(Grid** fc_output ,
                         FullyConnected** fc);
@@ -496,6 +496,7 @@ LAYER* Dense(FullyConnected* input){
 
     Grid* fc_output;
     Softmax_Activation(&fc_output,&input);
+
 
     layer->output_data->grid=fc_output;
     layer->name=ACTIVATION__;
@@ -840,12 +841,48 @@ void DENSE(Model** model){
 
 }
 
-void fit(Model** model){
 
-    double error=cross_entropy_sample((*model)->final_layer->output_data->grid,(*model)->Y);
+void calculate_deltas_fc(Model** model, LAYER** layer){
 
+    if(!(*layer)->name==FULLY_CONNECTED_AFTER_FLATTEN ||\
+            !(*layer)->name==FULLY_CONNECTED){
+
+                printf("\nWrong use of functions ..\n");
+                exit(0);
+
+            }
+
+    if((*layer)==(*model)->final_layer){
+
+        Grid* final_delta=Operate((*layer)->output_data->grid,(*model)->Y,"-");
+        (*layer)->deltas->grid=final_delta;
+
+        display_Grid(final_delta);
+
+    }
+
+    if((*layer)==(*model)->final_layer->previous_leyer){
+
+
+        Grid* pre_deltas_output;
+        Grid* transposed_weights=transpose((*layer)->kernels->grid);
+
+        grid_dot_mutiplication(&pre_deltas_output,&transposed_weights,&(*layer)->next_layer->deltas->grid);
+
+        Grid* Z_previous=deep_grid_copy((*layer)->previous_leyer->output_data->fc->Before_Activation);
+        Object function=function_to_object((*layer)->previous_leyer->output_data->fc->activation);
+
+        apply_function_to_Grid(&Z_previous,function.prime);
+        Grid* deltas_output=Operate(pre_deltas_output,Z_previous,"*");
+
+        (*layer)->deltas->grid=deltas_output;
+
+        display_Grid(deltas_output);
+
+    }
 
 }
+
 
 
 double add__(double a, double b){
@@ -2208,11 +2245,12 @@ void Fully_Connected_After_Flatten(FullyConnected** fc, Block** input, double (*
 
             A_i=deep_grid_copy(Z_i);
 
-
             local_fc->Before_Activation=Z_i;
 
             Grid* A_i_plus_bias=Operate(A_i,local_fc->bias,"+");
             apply_function_to_Grid(&A_i_plus_bias,local_fc->activation);
+
+            shape_grid(A_i_plus_bias);
 
             local_fc->After_Activation=A_i_plus_bias;
             local_fc->previous_size=input_layer_size;
@@ -2311,8 +2349,6 @@ void Fully_Connected(FullyConnected** fc, FullyConnected** fc_input,double (*act
 
             A_i=deep_grid_copy(Z_i);
 
-
-            local_fc->Before_Activation=Z_i;
 
             Grid* A_i_plus_bias=Operate(A_i,local_fc->bias,"+");
             apply_function_to_Grid(&A_i_plus_bias,local_fc->activation);
@@ -2424,7 +2460,10 @@ void display_Grid(Grid *table){
 }
 
 
+
+
 void model_code(){
+
 
     Model* model;
 
@@ -2437,6 +2476,7 @@ void model_code(){
 
     create_Model(&model,X,Y);
 
+
     add_CONV(&model,3,1,2,3,&relu);
     add_POOL(&model,2,2,3,"max");
     add_CONV(&model,5,2,2,5,&relu);
@@ -2448,8 +2488,14 @@ void model_code(){
     add_FC(&model,&sigmoid,12);
     DENSE(&model);
 
-    fit(&model);
-    //display_Grid(model->final_layer->output_data->grid);
+
+    printf("\nwanted layer:\n");
+    LAYER* l_1=model->final_layer->previous_leyer;
+    LAYER* l=model->final_layer;
+
+
+    calculate_deltas_fc(&model,&l);
+    calculate_deltas_fc(&model,&l_1);
 
 }
 
