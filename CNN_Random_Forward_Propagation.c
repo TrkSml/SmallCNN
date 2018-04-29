@@ -369,12 +369,12 @@ void Flatten(Block **output,
 void Fully_Connected_After_Flatten(FullyConnected** fc,
                                    Block** input,
                                    double (*activation)(double),
-                                   uint32_t output_layer_size);
+                                    int output_layer_size);
 
 void Fully_Connected(FullyConnected** fc,
                      FullyConnected** fc_input,
                      double (*activation)(double),
-                     uint32_t output_layer_size);
+                     int output_layer_size);
 
 void Softmax_Activation(Grid** fc_output ,
                         FullyConnected** fc);
@@ -531,7 +531,6 @@ LAYER* pool_layer(paramsPOOL prmpool, Block* input){
 
     //Add a block to recognize the elements
 
-    display_Block(cash);
     layer->deltas->block=cash;
     layer->output_data->block=output;
     layer->name=prmpool.name;
@@ -841,47 +840,6 @@ void DENSE(Model** model){
 
 }
 
-
-void calculate_deltas_fc(Model** model, LAYER** layer){
-
-    if(!(*layer)->name==FULLY_CONNECTED_AFTER_FLATTEN ||\
-            !(*layer)->name==FULLY_CONNECTED){
-
-                printf("\nWrong use of functions ..\n");
-                exit(0);
-
-            }
-
-    if((*layer)==(*model)->final_layer){
-
-        Grid* final_delta=Operate((*layer)->output_data->grid,(*model)->Y,"-");
-        (*layer)->deltas->grid=final_delta;
-
-        display_Grid(final_delta);
-
-    }
-
-    if((*layer)==(*model)->final_layer->previous_leyer){
-
-
-        Grid* pre_deltas_output;
-        Grid* transposed_weights=transpose((*layer)->kernels->grid);
-
-        grid_dot_mutiplication(&pre_deltas_output,&transposed_weights,&(*layer)->next_layer->deltas->grid);
-
-        Grid* Z_previous=deep_grid_copy((*layer)->previous_leyer->output_data->fc->Before_Activation);
-        Object function=function_to_object((*layer)->previous_leyer->output_data->fc->activation);
-
-        apply_function_to_Grid(&Z_previous,function.prime);
-        Grid* deltas_output=Operate(pre_deltas_output,Z_previous,"*");
-
-        (*layer)->deltas->grid=deltas_output;
-
-        display_Grid(deltas_output);
-
-    }
-
-}
 
 
 
@@ -2460,6 +2418,47 @@ void display_Grid(Grid *table){
 }
 
 
+void calculate_deltas_fc(Model** model, LAYER** layer){
+
+    if(!(*layer)->name==FULLY_CONNECTED_AFTER_FLATTEN ||\
+            !(*layer)->name==FULLY_CONNECTED){
+
+                printf("\nWrong use of functions ..\n");
+                exit(0);
+
+            }
+
+    if((*layer)==(*model)->final_layer){
+
+        Grid* final_delta=Operate((*layer)->output_data->grid,(*model)->Y,"-");
+        (*layer)->deltas->grid=final_delta;
+
+        display_Grid(final_delta);
+
+    }
+
+    if((*layer)==(*model)->final_layer->previous_leyer){
+
+
+        Grid* pre_deltas_output;
+        Grid* transposed_weights=transpose((*layer)->kernels->grid);
+
+        grid_dot_mutiplication(&pre_deltas_output,&transposed_weights,&(*layer)->next_layer->deltas->grid);
+
+        Grid* Z_previous=deep_grid_copy((*layer)->input_data->fc->Before_Activation);
+        Object function=function_to_object((*layer)->input_data->fc->activation);
+
+        apply_function_to_Grid(&Z_previous,function.prime);
+        Grid* deltas_output=Operate(pre_deltas_output,Z_previous,"*");
+
+        (*layer)->deltas->grid=deltas_output;
+
+        display_Grid(deltas_output);
+
+    }
+
+}
+
 
 
 void model_code(){
@@ -2469,7 +2468,7 @@ void model_code(){
 
     //declaring the input | output
     Block* X;
-    create_Block(&X,3,15,15,"random","float");
+    create_Block(&X,3,100,100,"random","float");
 
     Grid* Y=fill_index(12,2);
     //create_Grid(&Y,5,5,"random","int");
@@ -2482,17 +2481,22 @@ void model_code(){
     add_CONV(&model,5,2,2,5,&relu);
     add_POOL(&model,1,1,5,"max");
     add_CONV(&model,10,2,2,7,&relu);
+    add_POOL(&model,2,2,3,"max");
+    add_CONV(&model,5,2,2,5,&relu);
+    add_POOL(&model,1,1,5,"max");
+
     add_FLAT(&model);
     add_FCAF(&model,&tanh,100);
-    add_FC(&model,&sigmoid,50);
+    add_FC(&model,&sigmoid,80);
+    add_FC(&model,&sigmoid,60);
+    add_FC(&model,&tanh,50);
+    add_FC(&model,&tanh,20);
     add_FC(&model,&sigmoid,12);
     DENSE(&model);
-
 
     printf("\nwanted layer:\n");
     LAYER* l_1=model->final_layer->previous_leyer;
     LAYER* l=model->final_layer;
-
 
     calculate_deltas_fc(&model,&l);
     calculate_deltas_fc(&model,&l_1);
