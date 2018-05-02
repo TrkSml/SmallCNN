@@ -2437,11 +2437,18 @@ void calculate_deltas_fc(Model** model, LAYER** layer){
 
     }
 
+    else
+
     if((*layer)==(*model)->final_layer->previous_leyer){
 
+            (*layer)->deltas->grid=(*layer)->next_layer->deltas->grid;
+
+    }
+    else
+    {
 
         Grid* pre_deltas_output;
-        Grid* transposed_weights=transpose((*layer)->kernels->grid);
+        Grid* transposed_weights=transpose((*layer)->next_layer->kernels->grid);
 
         grid_dot_mutiplication(&pre_deltas_output,&transposed_weights,&(*layer)->next_layer->deltas->grid);
 
@@ -2456,6 +2463,7 @@ void calculate_deltas_fc(Model** model, LAYER** layer){
         display_Grid(deltas_output);
 
     }
+
 
 }
 
@@ -2494,12 +2502,17 @@ void model_code(){
     add_FC(&model,&sigmoid,12);
     DENSE(&model);
 
+
     printf("\nwanted layer:\n");
     LAYER* l_1=model->final_layer->previous_leyer;
     LAYER* l=model->final_layer;
 
+
     calculate_deltas_fc(&model,&l);
     calculate_deltas_fc(&model,&l_1);
+
+    calculate_deltas_fc(&model,&(l_1->previous_leyer));
+    calculate_deltas_fc(&model,&(l_1->previous_leyer->previous_leyer));
 
 }
 
