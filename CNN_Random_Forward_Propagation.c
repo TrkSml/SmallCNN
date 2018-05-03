@@ -15,7 +15,8 @@
 #define MNIST_DOUBLE
 #include "mnist.h"
 
-#define UPPER_BOUND 10
+#define UPPER_BOUND .005
+
 #define GEN_RANDOM_SEED srand(time(NULL))
 #define DEBUG printf("debug !")
 #define ERROR_DIMENSION_CONV printf("Dimension conflict: Please review the dimensions of the convolved arrays! \n")
@@ -206,6 +207,8 @@ typedef struct LAYER_{
 
     data* input_data;
     data* output_data;
+
+    double (*activation__)(double);
 
     Kernels* kernels;
     Kernels* deltas;
@@ -409,6 +412,8 @@ void initialize_layer_content_fc(LAYER** layer, FullyConnected** input){
     (*layer)->kernels->psool=NULL;
     (*layer)->kernels->grid=NULL;
 
+    //(*layer)->activation__=NULL;
+
     (*layer)->deltas->blocks=NULL;
     (*layer)->deltas->block=NULL;
     (*layer)->deltas->psool=NULL;
@@ -435,6 +440,8 @@ void initialize_layer_content_Block(LAYER** layer, Block** input){
     (*layer)->kernels->block=NULL;
     (*layer)->kernels->psool=NULL;
     (*layer)->kernels->grid=NULL;
+
+    //(*layer)->activation__=NULL;
 
     (*layer)->deltas->blocks=NULL;
     (*layer)->deltas->block=NULL;
@@ -472,6 +479,7 @@ LAYER* conv_layer(paramsCONV prmconvs, Block* input){
                             prmconvs.activation__
                             );
 
+    layer->activation__=prmconvs.activation__;
     layer->input_data->block=input;
     layer->output_data->block=output;
     layer->name=prmconvs.name;
@@ -493,7 +501,6 @@ LAYER* Dense(FullyConnected* input){
 
     Grid* fc_output;
     Softmax_Activation(&fc_output,&input);
-
 
     layer->output_data->grid=fc_output;
     layer->name=ACTIVATION__;
@@ -573,6 +580,8 @@ LAYER* fcaf_layer(paramsFCAF prmfcaf, Block* input){
 
     Grid* deltas;
     create_Grid(&deltas,output->weights->height,output->weights->width,"zeros","float");
+
+    layer->activation__=prmfcaf.activation__;
     layer->deltas->grid=deltas;
     layer->kernels->grid=output->weights;
     layer->output_data->fc=output;
@@ -600,6 +609,8 @@ LAYER* fc_layer(paramsFC prmffc, FullyConnected* input){
     create_Grid(&deltas,output->weights->height,output->weights->width,"zeros","float");
     layer->deltas->grid=deltas;
 
+    layer->input_data->fc=input;
+    layer->activation__=prmffc.activation__;
     layer->kernels->grid=output->weights;
     layer->output_data->fc=output;
     layer->name=prmffc.name;
@@ -912,7 +923,7 @@ Object function_to_object(double (*function)(double)){
 
 double generate_random(char* type){
     if(type=="int")
-    return rand() %UPPER_BOUND-UPPER_BOUND/2;
+    return rand()-UPPER_BOUND/2;
     if(type="float")
     return ((double)rand())/((double)RAND_MAX) * UPPER_BOUND-UPPER_BOUND/2;
         else{
@@ -2445,27 +2456,28 @@ void calculate_deltas_fc(Model** model, LAYER** layer){
             (*layer)->deltas->grid=(*layer)->next_layer->deltas->grid;
 
     }
+
     else
     {
 
-        Grid* pre_deltas_output;
-        Grid* transposed_weights=transpose((*layer)->next_layer->kernels->grid);
+            Grid* pre_deltas_output;
 
-        grid_dot_mutiplication(&pre_deltas_output,&transposed_weights,&(*layer)->next_layer->deltas->grid);
+            Grid* transposed_weights=transpose((*layer)->next_layer->kernels->grid);
+            grid_dot_mutiplication(&pre_deltas_output,&transposed_weights,&(*layer)->next_layer->deltas->grid);
 
-        Grid* Z_previous=deep_grid_copy((*layer)->input_data->fc->Before_Activation);
-        Object function=function_to_object((*layer)->input_data->fc->activation);
+            Grid* Z_previous=deep_grid_copy((*layer)->output_data->fc->Before_Activation);
+            Object function=function_to_object((*layer)->next_layer->activation__);
 
-        apply_function_to_Grid(&Z_previous,function.prime);
-        Grid* deltas_output=Operate(pre_deltas_output,Z_previous,"*");
+            apply_function_to_Grid(&Z_previous,function.prime);
 
-        (*layer)->deltas->grid=deltas_output;
+            Grid* deltas_output=Operate(pre_deltas_output,Z_previous,"*");
 
-        display_Grid(deltas_output);
+            (*layer)->deltas->grid=deltas_output;
+
+            //display_Grid(deltas_output);
+
 
     }
-
-
 }
 
 void transform_deltas_flatten(Model** model, LAYER** layer){
@@ -2490,6 +2502,9 @@ void transform_deltas_flatten(Model** model, LAYER** layer){
     shape_grid((*layer)->next_layer->deltas->grid);
     shape_block((*layer)->output_data->block);
     shape_block((*layer)->input_data->block);
+
+
+    //go through each delta output and reconstruct a decent delta input
 
 
 }
@@ -2563,10 +2578,10 @@ void model_code(){
 
     summary_layers(&model,"forward");
 
-    /*
 
     LAYER* l_1=model->final_layer->previous_layer;
     LAYER* l=model->final_layer;
+    LAYER* l_p=l_1->previous_layer->previous_layer->previous_layer->previous_layer->previous_layer;
 
     calculate_deltas_fc(&model,&l);
     calculate_deltas_fc(&model,&l_1);
@@ -2577,8 +2592,11 @@ void model_code(){
     calculate_deltas_fc(&model,&(l_1->previous_layer->previous_layer->previous_layer));
     calculate_deltas_fc(&model,&(l_1->previous_layer->previous_layer->previous_layer->previous_layer));
 
-    transform_deltas_flatten(&model,&(l_1->previous_layer->previous_layer->previous_layer->previous_layer));
-*/
+    calculate_deltas_fc(&model,&(l_1->previous_layer->previous_layer->previous_layer->previous_layer->previous_layer));
+
+    transform_deltas_flatten(&model,&l_p->previous_layer);
+    //transform_deltas_flatten(&model,&(l_1->previous_layer->previous_layer->previous_layer->previous_layer->previous_layer->previous_layer));
+
 
 }
 
