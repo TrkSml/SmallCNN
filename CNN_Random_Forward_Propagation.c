@@ -50,21 +50,18 @@ typedef enum{
 
 char* getType(TYPE_LAYER name){
 
-    switch((int)name){
-
-        case CONV :
-            "CONVOLUTION";
-        case POOL :
-            "POOLING";
-        case FLATTEN:
-            "FLATTEN";
-        case FULLY_CONNECTED_AFTER_FLATTEN:
-            "FULLY_CONNECTED_AFTER_FLATTEN";
-        case FULLY_CONNECTED:
-            "FULLY_CONNECTED";
-        case ACTIVATION__:
-            "ACTIVATION";
-    }
+        if(name==CONV)
+            return "CONVOLUTION";
+        if(name==POOL)
+            return "POOLING";
+        if(name==FLATTEN)
+            return "FLATTEN";
+        if(name==FULLY_CONNECTED_AFTER_FLATTEN)
+            return "FULLY_CONNECTED_AFTER_FLATTEN";
+        if(name==FULLY_CONNECTED)
+            return "FULLY_CONNECTED";
+        if(name==ACTIVATION__)
+            return "ACTIVATION";
 
 }
 
@@ -531,6 +528,7 @@ LAYER* pool_layer(paramsPOOL prmpool, Block* input){
 
     //Add a block to recognize the elements
 
+    layer->input_data->block=input;
     layer->deltas->block=cash;
     layer->output_data->block=output;
     layer->name=prmpool.name;
@@ -550,7 +548,7 @@ LAYER* flatten_layer(paramsFLATTEN prmft, Block* input){
     Block* output;
     Flatten(&output,&input);
 
-    //layer->input_data->block=input;
+    layer->input_data->block=input;
     layer->output_data->block=output;
     layer->name=prmft.name;
 
@@ -567,6 +565,7 @@ LAYER* fcaf_layer(paramsFCAF prmfcaf, Block* input){
 
     FullyConnected* output=initialize_Fully_Connected(1);;
 
+    layer->input_data->block=input;
     Fully_Connected_After_Flatten(&output,
                                   &input,
                                   prmfcaf.activation__,
@@ -577,6 +576,7 @@ LAYER* fcaf_layer(paramsFCAF prmfcaf, Block* input){
     layer->deltas->grid=deltas;
     layer->kernels->grid=output->weights;
     layer->output_data->fc=output;
+    layer->name=prmfcaf.name;
 
     return layer;
 
@@ -670,6 +670,7 @@ void update_model(Model** model, LAYER** layer){
 
     (*model)->first_layer=current_first;
     (*model)->final_layer=current_last;
+
 
 }
 
@@ -793,7 +794,7 @@ void add_FCAF(Model** model,double (*activation)(double),
 void add_FC(Model** model,double (*activation)(double),
                             uint32_t output_size){
 
-    paramsFC params_fc={name:FULLY_CONNECTED_AFTER_FLATTEN,
+    paramsFC params_fc={name:FULLY_CONNECTED,
                             activation__:activation,
                             output_size:output_size};
 
@@ -2052,13 +2053,13 @@ void Flatten(Block **output, Block **input){
     block->width=1;
     block->height=1;
 
-   double*** Flattened=(double***)malloc(block->depth*sizeof(double**));
+    double*** Flattened=(double***)malloc(block->depth*sizeof(double**));
 
-   uint32_t index_depth;
-   uint32_t index_height;
-   uint32_t index_width;
+    uint32_t index_depth;
+    uint32_t index_height;
+    uint32_t index_width;
 
-   uint32_t counter_array_flattened=0;
+    uint32_t counter_array_flattened=0;
 
     for(index_depth=0;index_depth<(*input)->depth;index_depth++){
 
@@ -2467,7 +2468,46 @@ void calculate_deltas_fc(Model** model, LAYER** layer){
 
 }
 
+void transform_deltas_flatten(Model** model, LAYER** layer){
 
+    if(!(*layer)->name==FLATTEN)
+        {
+
+                printf("\nWrong use of functions ..\n");
+                exit(0);
+
+        }
+
+    Block* deltas=initialize_Block(1);
+
+    Block* input_layer_block=(*layer)->input_data->block;
+
+    deltas->depth=input_layer_block->depth;
+    deltas->height=input_layer_block->height;
+    deltas->width=input_layer_block->width;
+
+
+    shape_grid((*layer)->next_layer->deltas->grid);
+    shape_block((*layer)->output_data->block);
+    shape_block((*layer)->input_data->block);
+
+
+}
+
+void summary_layers(Model** model){
+
+    LAYER* current=(*model)->first_layer;
+
+    write("\n");
+    while(current){
+        write("\n");
+        write(getType(current->name));
+        current=current->next_layer;
+    }
+
+    printf("\n\nIn total we have %d layers \n",(*model)->nbr_levels);
+
+}
 
 void model_code(){
 
@@ -2489,7 +2529,7 @@ void model_code(){
     add_CONV(&model,5,2,2,5,&relu);
     add_POOL(&model,1,1,5,"max");
     add_CONV(&model,10,2,2,7,&relu);
-    add_POOL(&model,2,2,3,"max");
+    add_POOL(&model,2,2,3,"avg");
     add_CONV(&model,5,2,2,5,&relu);
     add_POOL(&model,1,1,5,"max");
 
@@ -2503,16 +2543,23 @@ void model_code(){
     DENSE(&model);
 
 
-    printf("\nwanted layer:\n");
     LAYER* l_1=model->final_layer->previous_leyer;
     LAYER* l=model->final_layer;
 
 
+    summary_layers(&model);
+    /*
     calculate_deltas_fc(&model,&l);
     calculate_deltas_fc(&model,&l_1);
 
     calculate_deltas_fc(&model,&(l_1->previous_leyer));
     calculate_deltas_fc(&model,&(l_1->previous_leyer->previous_leyer));
+
+    calculate_deltas_fc(&model,&(l_1->previous_leyer->previous_leyer->previous_leyer));
+    calculate_deltas_fc(&model,&(l_1->previous_leyer->previous_leyer->previous_leyer->previous_leyer));
+
+    transform_deltas_flatten(&model,&(l_1->previous_leyer->previous_leyer->previous_leyer->previous_leyer));
+*/
 
 }
 
