@@ -213,7 +213,7 @@ typedef struct LAYER_{
     TYPE_LAYER name;
 
     struct LAYER_* next_layer;
-    struct LAYER_* previous_leyer;
+    struct LAYER_* previous_layer;
 
 }LAYER;
 
@@ -414,7 +414,7 @@ void initialize_layer_content_fc(LAYER** layer, FullyConnected** input){
     (*layer)->deltas->psool=NULL;
     (*layer)->deltas->grid=NULL;
 
-    (*layer)->previous_leyer=NULL;
+    (*layer)->previous_layer=NULL;
     (*layer)->next_layer=NULL;
 
 }
@@ -441,7 +441,7 @@ void initialize_layer_content_Block(LAYER** layer, Block** input){
     (*layer)->deltas->psool=NULL;
     (*layer)->deltas->grid=NULL;
 
-    (*layer)->previous_leyer=NULL;
+    (*layer)->previous_layer=NULL;
     (*layer)->next_layer=NULL;
 
 }
@@ -627,7 +627,7 @@ void determine_pointers_first_and_last(Model** model, LAYER** current_first, LAY
     if(!*current_first && ! *current_last){
 
         (*layer)->next_layer=NULL;
-        (*layer)->previous_leyer=NULL;
+        (*layer)->previous_layer=NULL;
 
         *current_first=*layer;
         *current_last=*current_first;
@@ -639,7 +639,7 @@ void determine_pointers_first_and_last(Model** model, LAYER** current_first, LAY
 
         (*current_last)->next_layer=initialize_LAYER(1);
         (*current_last)->next_layer=*layer;
-        (*layer)->previous_leyer=*current_first;
+        (*layer)->previous_layer=*current_first;
         (*layer)->next_layer=NULL;
         *current_last=*layer;
 
@@ -652,7 +652,7 @@ void determine_pointers_first_and_last(Model** model, LAYER** current_first, LAY
 
         (*current_last)->next_layer=initialize_LAYER(1);
         (*current_last)->next_layer=*layer;
-        (*layer)->previous_leyer=*current_last;
+        (*layer)->previous_layer=*current_last;
         (*layer)->next_layer=NULL;
         *current_last=*layer;
 
@@ -2440,7 +2440,7 @@ void calculate_deltas_fc(Model** model, LAYER** layer){
 
     else
 
-    if((*layer)==(*model)->final_layer->previous_leyer){
+    if((*layer)==(*model)->final_layer->previous_layer){
 
             (*layer)->deltas->grid=(*layer)->next_layer->deltas->grid;
 
@@ -2494,15 +2494,34 @@ void transform_deltas_flatten(Model** model, LAYER** layer){
 
 }
 
-void summary_layers(Model** model){
+void summary_layers(Model** model,char* choice){
 
-    LAYER* current=(*model)->first_layer;
 
-    write("\n");
-    while(current){
+    if(choice=="forward"){
+
+        LAYER* current=(*model)->first_layer;
+
         write("\n");
-        write(getType(current->name));
-        current=current->next_layer;
+        while(current){
+            write("\n");
+            write(getType(current->name));
+            current=current->next_layer;
+        }
+    }
+    else
+    if(choice=="backward"){
+
+        LAYER* current=(*model)->final_layer;
+
+        write("\n");
+        while(current){
+            write("\n");
+            write(getType(current->name));
+            current=current->previous_layer;
+        }
+    }
+    else{
+        write("Uknown choice : either 'forward' or 'backward'..");
     }
 
     printf("\n\nIn total we have %d layers \n",(*model)->nbr_levels);
@@ -2542,23 +2561,23 @@ void model_code(){
     add_FC(&model,&sigmoid,12);
     DENSE(&model);
 
+    summary_layers(&model,"forward");
 
-    LAYER* l_1=model->final_layer->previous_leyer;
+    /*
+
+    LAYER* l_1=model->final_layer->previous_layer;
     LAYER* l=model->final_layer;
 
-
-    summary_layers(&model);
-    /*
     calculate_deltas_fc(&model,&l);
     calculate_deltas_fc(&model,&l_1);
 
-    calculate_deltas_fc(&model,&(l_1->previous_leyer));
-    calculate_deltas_fc(&model,&(l_1->previous_leyer->previous_leyer));
+    calculate_deltas_fc(&model,&(l_1->previous_layer));
+    calculate_deltas_fc(&model,&(l_1->previous_layer->previous_layer));
 
-    calculate_deltas_fc(&model,&(l_1->previous_leyer->previous_leyer->previous_leyer));
-    calculate_deltas_fc(&model,&(l_1->previous_leyer->previous_leyer->previous_leyer->previous_leyer));
+    calculate_deltas_fc(&model,&(l_1->previous_layer->previous_layer->previous_layer));
+    calculate_deltas_fc(&model,&(l_1->previous_layer->previous_layer->previous_layer->previous_layer));
 
-    transform_deltas_flatten(&model,&(l_1->previous_leyer->previous_leyer->previous_leyer->previous_leyer));
+    transform_deltas_flatten(&model,&(l_1->previous_layer->previous_layer->previous_layer->previous_layer));
 */
 
 }
