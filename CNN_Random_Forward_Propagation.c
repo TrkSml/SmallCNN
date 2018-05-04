@@ -2554,9 +2554,9 @@ void calculate_deltas_fc(Model** model, LAYER** layer){
         }
 }
 
-void transform_deltas_flatten(Model** model, LAYER** layer){
+void calculate_deltas__(Model** model, LAYER** layer){
 
-    if(!(*layer)->name==FLATTEN)
+    if((*layer)->name!=POOL)
         {
 
                 printf("\nWrong use of functions ..\n");
@@ -2564,28 +2564,50 @@ void transform_deltas_flatten(Model** model, LAYER** layer){
 
         }
 
-    Block* deltas=initialize_Block(1);
+    else{
+
+        if((*layer)->next_layer->name==FLATTEN){
+
+            Block* deltas=(*layer)->next_layer->deltas->block;
+            Block* block_for_dimensions=(*layer)->next_layer->input_data->block;
+
+            Block* current_deltas=initialize_Block(1);
+
+            current_deltas->width=block_for_dimensions->width;
+            current_deltas->depth=block_for_dimensions->depth;
+            current_deltas->height=block_for_dimensions->height;
+
+            uint32_t ind_d,ind_h,ind_w,current=0;
+
+            current_deltas->matrix=initialize_triple_pointer_double(current_deltas->depth);
+
+            for(ind_d=0;ind_d<current_deltas->depth;ind_d++){
+                double** col=initialize_double_pointer_double(current_deltas->height);
+
+                for(ind_h=0;ind_h<current_deltas->height;ind_h++){
+                    double* row=initialize_pointer_double(current_deltas->width);
+
+                    for(ind_w=0;ind_w<current_deltas->width;ind_w++){
+
+                        *(row+ind_w)=deltas->matrix[current][0][0];
+                        current++;
+                    }
+                    *(col+ind_h)=row;
+                }
+                *(current_deltas->matrix+ind_d)=col;
+            }
+        }
+
+        else{
 
 
-    Grid* deltas_to_transform=(*layer)->next_layer->deltas->grid;
 
-    Block* deltas_transformed;
 
-    extract_Flatten_Block_from_Grid(&deltas_to_transform,&deltas_transformed);
+        }
 
-    write("deltas of next layer ..");
-    shape_grid((*layer)->next_layer->deltas->grid);
 
-    write("output data block ..");
-    shape_grid((*layer)->output_data->block);
-
-    write("input data block ..");
-    shape_block((*layer)->input_data->block);
-
-    write("flattened deltas");
-    shape_block(deltas_transformed);
+    }
     //go through each delta output and reconstruct a decent delta input
-
 
 }
 
@@ -2673,11 +2695,10 @@ void model_code(){
     calculate_deltas_fc(&model,&(l_1->previous_layer->previous_layer->previous_layer->previous_layer->previous_layer));
 
     calculate_deltas_fc(&model,&(l_p->previous_layer));
+
+    calculate_deltas__(&model,&(l_p->previous_layer->previous_layer));
     //transform_deltas_flatten(&model,&(l_1->previous_layer->previous_layer->previous_layer->previous_layer->previous_layer->previous_layer));
 
-    shape_block(l_p->previous_layer->deltas->block);
-    shape_block(l_p->previous_layer->output_data->block);
-    shape_block(l_p->previous_layer->input_data->block);
 
 }
 
