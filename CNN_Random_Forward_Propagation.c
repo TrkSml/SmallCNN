@@ -31,7 +31,7 @@
 #define current_Layer(x) printf("\nCurrent Layer: %s\n",x)
 #define max(X, Y)  ((X) > (Y) ? (X) : (Y))
 #define min(X, Y)  ((X) < (Y) ? (X) : (Y))
-#define write(x) printf("%s",x)
+#define write(x) printf("\n%s\n",x)
 
 //#define add__(a,b) ({retun a+b;})
 //#define substract__(a,b) ({retun a-b;})
@@ -2043,6 +2043,28 @@ void extract_Grid_From_Flatten_Block(Block** block, Grid** grid){
 
 }
 
+void extract_Flatten_Block_from_Grid(Grid** grid, Block** block){
+
+    *block=initialize_Block(1);
+
+    (*block)->depth=(*grid)->height;
+    (*block)->height=1;
+    (*block)->width=1;
+
+    (*block)->matrix=initialize_triple_pointer_double((*block)->depth);
+
+    uint32_t index_depth;
+    for(index_depth=0;index_depth<(*block)->depth;index_depth++){
+
+        *((*block)->matrix+index_depth)=initialize_double_pointer_double(1);
+        **((*block)->matrix+index_depth)=initialize_pointer_double(1);
+        ***((*block)->matrix+index_depth)=(*grid)->grid[index_depth][0];
+
+    }
+
+
+}
+
 
 
 void Flatten(Block **output, Block **input){
@@ -2432,52 +2454,104 @@ void display_Grid(Grid *table){
 
 void calculate_deltas_fc(Model** model, LAYER** layer){
 
-    if(!(*layer)->name==FULLY_CONNECTED_AFTER_FLATTEN ||\
-            !(*layer)->name==FULLY_CONNECTED){
+    write(getType((*layer)->name));
+    if((*layer)->name!=FULLY_CONNECTED_AFTER_FLATTEN &&\
+            (*layer)->name!=FULLY_CONNECTED &&\
+            (*layer)->name!=ACTIVATION__ &&\
+            (*layer)->name!=FLATTEN
+       ){
 
                 printf("\nWrong use of functions ..\n");
                 exit(0);
 
             }
 
-    if((*layer)==(*model)->final_layer){
-
-        Grid* final_delta=Operate((*layer)->output_data->grid,(*model)->Y,"-");
-        (*layer)->deltas->grid=final_delta;
-
-        display_Grid(final_delta);
-
-    }
-
     else
+        {
 
-    if((*layer)==(*model)->final_layer->previous_layer){
+            if((*layer)==(*model)->final_layer){
 
-            (*layer)->deltas->grid=(*layer)->next_layer->deltas->grid;
-
-    }
-
-    else
-    {
-
-            Grid* pre_deltas_output;
-
-            Grid* transposed_weights=transpose((*layer)->next_layer->kernels->grid);
-            grid_dot_mutiplication(&pre_deltas_output,&transposed_weights,&(*layer)->next_layer->deltas->grid);
-
-            Grid* Z_previous=deep_grid_copy((*layer)->output_data->fc->Before_Activation);
-            Object function=function_to_object((*layer)->next_layer->activation__);
-
-            apply_function_to_Grid(&Z_previous,function.prime);
-
-            Grid* deltas_output=Operate(pre_deltas_output,Z_previous,"*");
-
-            (*layer)->deltas->grid=deltas_output;
-
-            //display_Grid(deltas_output);
+                Grid* final_delta=Operate((*layer)->output_data->grid,(*model)->Y,"-");
+                (*layer)->deltas->grid=final_delta;
 
 
-    }
+            }
+
+            else
+
+            if((*layer)==(*model)->final_layer->previous_layer){
+
+                    (*layer)->deltas->grid=(*layer)->next_layer->deltas->grid;
+
+            }
+
+            else
+            {
+
+                    Grid* pre_deltas_output;
+                    Grid* transposed_weights=transpose((*layer)->next_layer->kernels->grid);
+                    grid_dot_mutiplication(&pre_deltas_output,&transposed_weights,&(*layer)->next_layer->deltas->grid);
+
+
+                    if((*layer)->name==FLATTEN){
+
+                        Block* data_to_flat=deep_block_copy((*layer)->output_data->block);
+
+                        Grid* data_flattend;
+                        extract_Grid_From_Flatten_Block(&data_to_flat,&data_flattend);
+
+                        Grid* Z_previous=deep_grid_copy(data_flattend);
+
+                        Object function=function_to_object((*layer)->next_layer->activation__);
+                        apply_function_to_Grid(&Z_previous,function.prime);
+
+                        Grid* deltas_output=Operate(pre_deltas_output,transpose(Z_previous),"*");
+
+                        Block* final_deltas;
+
+                        extract_Flatten_Block_from_Grid(&deltas_output,&final_deltas);
+                        (*layer)->deltas->block=final_deltas;
+
+                    }
+
+                    else {
+
+                        Grid* Z_previous=deep_grid_copy((*layer)->output_data->fc->Before_Activation);
+
+                        Object function=function_to_object((*layer)->next_layer->activation__);
+                        apply_function_to_Grid(&Z_previous,function.prime);
+
+                        Grid* deltas_output=Operate(pre_deltas_output,Z_previous,"*");
+
+                        (*layer)->deltas->grid=deltas_output;
+
+                    }
+
+
+                    /*
+                    write("--------------------------");
+                    write("Deltas+1");
+                    shape_grid((*layer)->next_layer->deltas->grid);
+
+                    write("A_I");
+                    shape_grid(transpose((*layer)->output_data->fc->After_Activation));
+
+                    write("matching this layer..");
+
+                    shape_grid((*layer)->kernels->grid);
+
+                    write("or next layer ..");
+
+                    shape_grid((*layer)->next_layer->kernels->grid);
+                    write("--------------------------");
+                    */
+
+                    //Next thing .. we will update the next layer for sure :)))
+
+
+            }
+
+        }
 }
 
 void transform_deltas_flatten(Model** model, LAYER** layer){
@@ -2492,18 +2566,24 @@ void transform_deltas_flatten(Model** model, LAYER** layer){
 
     Block* deltas=initialize_Block(1);
 
-    Block* input_layer_block=(*layer)->input_data->block;
 
-    deltas->depth=input_layer_block->depth;
-    deltas->height=input_layer_block->height;
-    deltas->width=input_layer_block->width;
+    Grid* deltas_to_transform=(*layer)->next_layer->deltas->grid;
 
+    Block* deltas_transformed;
 
+    extract_Flatten_Block_from_Grid(&deltas_to_transform,&deltas_transformed);
+
+    write("deltas of next layer ..");
     shape_grid((*layer)->next_layer->deltas->grid);
-    shape_block((*layer)->output_data->block);
+
+    write("output data block ..");
+    shape_grid((*layer)->output_data->block);
+
+    write("input data block ..");
     shape_block((*layer)->input_data->block);
 
-
+    write("flattened deltas");
+    shape_block(deltas_transformed);
     //go through each delta output and reconstruct a decent delta input
 
 
@@ -2518,7 +2598,6 @@ void summary_layers(Model** model,char* choice){
 
         write("\n");
         while(current){
-            write("\n");
             write(getType(current->name));
             current=current->next_layer;
         }
@@ -2530,7 +2609,6 @@ void summary_layers(Model** model,char* choice){
 
         write("\n");
         while(current){
-            write("\n");
             write(getType(current->name));
             current=current->previous_layer;
         }
@@ -2594,9 +2672,12 @@ void model_code(){
 
     calculate_deltas_fc(&model,&(l_1->previous_layer->previous_layer->previous_layer->previous_layer->previous_layer));
 
-    transform_deltas_flatten(&model,&l_p->previous_layer);
+    calculate_deltas_fc(&model,&(l_p->previous_layer));
     //transform_deltas_flatten(&model,&(l_1->previous_layer->previous_layer->previous_layer->previous_layer->previous_layer->previous_layer));
 
+    shape_block(l_p->previous_layer->deltas->block);
+    shape_block(l_p->previous_layer->output_data->block);
+    shape_block(l_p->previous_layer->input_data->block);
 
 }
 
