@@ -212,6 +212,7 @@ typedef struct LAYER_{
 
     Kernels* kernels;
     Kernels* deltas;
+    Kernels* cash;
 
     TYPE_LAYER name;
 
@@ -406,6 +407,7 @@ void initialize_layer_content_fc(LAYER** layer, FullyConnected** input){
 
     (*layer)->kernels=(Kernels*)malloc(sizeof(Kernels*));
     (*layer)->deltas=(Kernels*)malloc(sizeof(Kernels*));
+    (*layer)->cash=(Kernels*)malloc(sizeof(Kernels*));
 
     (*layer)->kernels->blocks=NULL;
     (*layer)->kernels->block=NULL;
@@ -418,6 +420,11 @@ void initialize_layer_content_fc(LAYER** layer, FullyConnected** input){
     (*layer)->deltas->block=NULL;
     (*layer)->deltas->psool=NULL;
     (*layer)->deltas->grid=NULL;
+
+    (*layer)->cash->blocks=NULL;
+    (*layer)->cash->block=NULL;
+    (*layer)->cash->psool=NULL;
+    (*layer)->cash->grid=NULL;
 
     (*layer)->previous_layer=NULL;
     (*layer)->next_layer=NULL;
@@ -435,6 +442,7 @@ void initialize_layer_content_Block(LAYER** layer, Block** input){
 
     (*layer)->kernels=(Kernels*)malloc(sizeof(Kernels*));
     (*layer)->deltas=(Kernels*)malloc(sizeof(Kernels*));
+    (*layer)->cash=(Kernels*)malloc(sizeof(Kernels*));
 
     (*layer)->kernels->blocks=NULL;
     (*layer)->kernels->block=NULL;
@@ -447,6 +455,11 @@ void initialize_layer_content_Block(LAYER** layer, Block** input){
     (*layer)->deltas->block=NULL;
     (*layer)->deltas->psool=NULL;
     (*layer)->deltas->grid=NULL;
+
+    (*layer)->cash->blocks=NULL;
+    (*layer)->cash->block=NULL;
+    (*layer)->cash->psool=NULL;
+    (*layer)->cash->grid=NULL;
 
     (*layer)->previous_layer=NULL;
     (*layer)->next_layer=NULL;
@@ -475,9 +488,12 @@ LAYER* conv_layer(paramsCONV prmconvs, Block* input){
                 prmconvs.stride,
                 prmconvs.padding);
 
+    layer->cash->block=deep_block_copy(output);
+
     apply_function_to_Block(&output,
                             prmconvs.activation__
                             );
+
 
     layer->activation__=prmconvs.activation__;
     layer->input_data->block=input;
@@ -543,7 +559,7 @@ LAYER* pool_layer(paramsPOOL prmpool, Block* input){
     write("---------------");
 
     layer->input_data->block=input;
-    layer->deltas->block=cash;
+    layer->cash->block=cash;
     layer->output_data->block=output;
     layer->name=prmpool.name;
 
@@ -2662,6 +2678,8 @@ void calculate_deltas__conv(Model** model, LAYER** layer){
     shape_block((*layer)->input_data->block);
 
     Block* next_deltas=(*layer)->next_layer->deltas->block;
+    display_Block(next_deltas);
+
     AddPadding_Block(&next_deltas,3);
 
     Grid* extracted_next_deltas=extract_grid_from_given_depth(&next_deltas,0);
@@ -2689,6 +2707,41 @@ void calculate_deltas__conv(Model** model, LAYER** layer){
     based on the weights, the next deltas and the output ;
 
     */
+
+}
+
+Block* mean_block(Block* block){
+
+    Block* mean_block=initialize_Block(1);
+
+    mean_block->depth=1;
+    mean_block->height=block->height;
+    mean_block->width=block->width;
+
+    mean_block->matrix=initialize_triple_pointer_double(1);
+    *(mean_block->matrix)=initialize_double_pointer_double(block->height);
+
+    uint32_t ind_d,ind_h,ind_w;
+
+    for(ind_h=0;ind_h<block->height;ind_h++){
+
+        *(*(mean_block->matrix)+ind_h)=initialize_pointer_double(block->width);
+
+        for(ind_w=0;ind_w<block->width;ind_w++){
+
+            double sum=0.;
+
+            for(ind_d=0;ind_d<block->depth;ind_d++){
+
+                    sum+=block->matrix[ind_d][ind_h][ind_w];
+
+                }
+                *(*(*(mean_block->matrix)+ind_h)+ind_w)=sum/(block->depth);
+
+        }
+    }
+
+    return mean_block;
 
 }
 
@@ -2730,17 +2783,23 @@ void model_code(){
 
     Model* model;
 
+    write("lol");
     //declaring the input | output
     Block* X;
-    create_Block(&X,3,101,101,"random","float");
+    write("lol");
+    create_Block(&X,3,100,100,"random","float");
 
+    write("lol");
     Grid* Y=fill_index(12,2);
     //create_Grid(&Y,5,5,"random","int");
 
+    write("lol");
     create_Model(&model,X,Y);
 
 
+    write("lol");
     add_CONV(&model,3,1,2,3,&relu);
+    write("lol");
     add_POOL(&model,2,2,3,"max");
     add_CONV(&model,5,2,2,5,&relu);
     add_POOL(&model,1,1,5,"max");
@@ -2790,7 +2849,17 @@ int main()
 {
 
     //Debugging the code
-    model_code();
+    //model_code();
+
+    Block* block;
+
+    create_Block(&block,3,3,3,"random","float");
+
+    Block* mean=mean_block(block);
+
+    display_Block(block);
+
+    display_Block(mean);
 
     printf("\nDONE :))) ! \n\n");
 
