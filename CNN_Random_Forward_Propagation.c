@@ -19,6 +19,7 @@
 
 #define GEN_RANDOM_SEED srand(time(NULL))
 #define DEBUG printf("debug !")
+#define NULL_BLOCK printf("\nSorry .. the block is null ..\n")
 #define ERROR_DIMENSION_CONV printf("Dimension conflict: Please review the dimensions of the convolved arrays! \n")
 #define ERROR_DEPTH printf("Cannot perform convolution: Please make sure the kernel and the block have the same depth. \n")
 #define ERROR_NULL printf("Null input. \n")
@@ -1066,7 +1067,12 @@ FullyConnected* initialize_Fully_Connected(size_t size_allocation){
 
 Block* initialize_Block(size_t size_allocation){
 
-    return malloc(size_allocation*sizeof(Block));
+    Block* block=malloc(size_allocation*sizeof(Block));
+
+    block->depth=0;
+    block->height=0;
+    block->width=0;
+
 }
 
 Block** initialize_pointer_Block(size_t size_allocation){
@@ -2711,6 +2717,8 @@ void calculate_deltas__conv(Model** model, LAYER** layer){
 }
 
 Block* mean_block(Block* block){
+    /* Compress all the channels of a block into an average one channel block */
+
 
     Block* mean_block=initialize_Block(1);
 
@@ -2742,6 +2750,45 @@ Block* mean_block(Block* block){
     }
 
     return mean_block;
+
+}
+
+
+void append_Block(Block** main_block, Block** block){
+
+
+    if(!test_block_null_dimension(*main_block)) {
+
+            *main_block=*block;
+
+    }
+
+    else {
+
+    Block* new_main_block=initialize_Block(1);
+
+    if((*main_block)->height!=(*block)->height || (*main_block)->width!=(*block)->width){
+
+        printf("Blocks must have same heights && widths .. ");
+        exit(0);
+
+    }
+
+
+    new_main_block->depth=(*main_block)->depth+(*block)->depth;
+    new_main_block->height=(*main_block)->height;
+    new_main_block->width=(*main_block)->width;
+
+    new_main_block->matrix=initialize_triple_pointer_double(new_main_block->depth);
+
+    *(new_main_block->matrix)=*((*main_block)->matrix);
+    *(new_main_block->matrix+1)=*((*main_block)->matrix);
+
+    *main_block=new_main_block;
+
+    free(new_main_block);
+
+    }
 
 }
 
@@ -2849,17 +2896,7 @@ int main()
 {
 
     //Debugging the code
-    //model_code();
-
-    Block* block;
-
-    create_Block(&block,3,3,3,"random","float");
-
-    Block* mean=mean_block(block);
-
-    display_Block(block);
-
-    display_Block(mean);
+    model_code();
 
     printf("\nDONE :))) ! \n\n");
 
