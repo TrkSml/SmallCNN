@@ -354,6 +354,8 @@ double relu(double x);
 double sigmoid(double x);
 double cross_entropy_sample(Grid* y_hat, Grid* y);
 
+Block* mean_block(Block* block);
+
 
 void Convolution(Block** bl_output,
                  Block **input,
@@ -972,6 +974,14 @@ unsigned int determine_size_output(int input_height,unsigned int kernel_height,u
      return (int)(((input_height-kernel_height+2*padding)/stride))+1;
 }
 
+void shape_blocks(Blocks* blocks){
+
+    printf("number of blocks : %d \n",blocks->length);
+    printf("depth : %d \n",blocks->blocks[0]->depth);
+    printf("height : %d \n",blocks->blocks[0]->height);
+    printf("width : %d \n",blocks->blocks[0]->width);
+
+}
 
 
 
@@ -993,7 +1003,7 @@ void shape_grid(Grid* grid){
 
 unsigned int test_block_null_dimension(Block* block){
 
-    return block->height && block->width && block->depth;
+    return block->height>0 && block->width>0 && block->depth>0;
 }
 
 unsigned int test_grid_null_dimension(Grid* grid){
@@ -1082,6 +1092,10 @@ Block* initialize_Block(size_t size_allocation){
 Block** initialize_pointer_Block(size_t size_allocation){
 
     return malloc(size_allocation*sizeof(Block*));
+}
+
+Blocks* initialize_Blocks(size_t size_allocation){
+    return malloc(size_allocation*sizeof(Blocks));
 }
 
 
@@ -2680,8 +2694,8 @@ Block* get_one_dimension_from_block(Block* block, uint32_t depth){
 
 Block* element_wise_multiplication(Block* block1, Block* block2){
 
-        /*
-        if(test_equal_blocks_dimensions(block1,block2)){
+
+        if(!test_equal_blocks_dimensions(block1,block2)){
 
             ERROR_DIM_BLOCK_DIMENSIONS;
             exit(0);
@@ -2689,13 +2703,8 @@ Block* element_wise_multiplication(Block* block1, Block* block2){
         }
 
         else{
-            */
 
             Block* product=initialize_Block(1);
-
-            product->depth=block1->depth;
-            product->height=block1->height;
-            product->width=block1->width;
 
             uint32_t index_d;
 
@@ -2709,16 +2718,13 @@ Block* element_wise_multiplication(Block* block1, Block* block2){
                 Block* output;
 
                 get_Block_from_Grid(&result,&output);
-
-                display_Block(output);
-
                 append_Block(&product,&output);
-                write("ok");
+
             }
 
             return product;
 
-        //}
+        }
 
 }
 
@@ -2735,15 +2741,12 @@ Block* crop_Block(Block* to_be_cropped, Block* to_be_used){
     uint32_t ind_d, ind_h, ind_w;
 
     for(ind_d=0;ind_d<cropped->depth;ind_d++){
-
         *(cropped->matrix+ind_d)=initialize_double_pointer_double(cropped->height);
 
         for(ind_h=0;ind_h<cropped->height;ind_h++){
-
                 *(*(cropped->matrix+ind_d)+ind_h)=initialize_pointer_double(cropped->width);
 
                 for(ind_w=0;ind_w<cropped->width;ind_w++){
-
                     *(*(*(cropped->matrix+ind_d)+ind_h)+ind_w)=to_be_cropped->matrix[ind_d][ind_h][ind_w];
 
 
@@ -2758,66 +2761,64 @@ Block* crop_Block(Block* to_be_cropped, Block* to_be_used){
 
 void calculate_deltas__conv(Model** model, LAYER** layer){
 
-
-    Blocks* weights=extract_from_Blocks((*layer)->kernels->blocks,0);
-
-    //Block*
+    Block* final_delta=initialize_Block(1);
+    Blocks* weights=(*layer)->kernels->blocks;
 
     Block* next_deltas=(*layer)->next_layer->deltas->block;
-    //Block* next_cash=(*layer)->next_layer->cash->block;
-
     Block* cash=(*layer)->cash->block;
+    Block* next_cash=(*layer)->next_layer->cash->block;
+
+    uint32_t depth_weights=weights->blocks[0]->depth;
+    uint32_t depth_next_deltas=next_deltas->depth;
+
+    Blocks* deltas=initialize_Blocks(1);
+    deltas->length=weights->length;
+    deltas->blocks=initialize_Block(deltas->length);
 
     uint32_t height_to_be_padded=cash->height-next_deltas->height+1;
-
-
     AddPadding_Block(&next_deltas,height_to_be_padded);
 
 
-    Block* block_next_deltas=get_one_dimension_from_block(next_deltas,0);
-    Block* block_first_kernel=Flip_Block(get_one_dimension_from_block(weights,0));
-    Block* Z_i=get_one_dimension_from_block(cash,0);
-    Block* next_cash=(*layer)->next_layer->cash->block;;
+    uint32_t index_nbr_kernels;
 
-    //shape_block(block_first_kernel);
-    //shape_block(block_next_deltas);
+    for(index_nbr_kernels=0;index_nbr_kernels<deltas->length;index_nbr_kernels++){
 
-    write("next deltas");
-    shape_block(block_next_deltas);
+        Block* wanted_weights=extract_from_Blocks(weights,index_nbr_kernels);
+        Block* small_delta=initialize_Block(1);
 
-    write("first kernel");
-    shape_block(block_first_kernel);
-    //shape_block((*layer)->output_data->block);
+        uint32_t index_next_deltas,index_weights;
 
+        for(index_weights=0;index_weights<depth_weights;index_weights++){
 
-    write("ok");
-    Grid* output=convolve(block_next_deltas,block_first_kernel,1,0);
+            Block* tmp_delta=initialize_Block(1);
 
-    Block* output_block;
+            for(index_next_deltas=0;index_next_deltas<depth_next_deltas;index_next_deltas++){
 
-    write("ok");
-    get_Block_from_Grid(&output,&output_block);
+                Block* block_next_deltas=get_one_dimension_from_block(next_deltas,index_next_deltas);
+                Block* block_first_kernel=Flip_Block(get_one_dimension_from_block(wanted_weights,index_weights));
+                Block* Z_i=get_one_dimension_from_block(cash,index_next_deltas);
 
-    write("ok");
-    Block* cropped_output_block=crop_Block(output_block,Z_i);
+                Grid* output=convolve(block_next_deltas,block_first_kernel,1,0);
 
-    write("ok");
-    write("output conv :");
-    shape_block(cropped_output_block);
+                Block* output_block;
+                get_Block_from_Grid(&output,&output_block);
 
-    write("Z_i :");
-    shape_block(Z_i);
-
-    write("next cash :");
-    shape_block(next_cash);
+                Block* cropped_output_block=crop_Block(output_block,Z_i);
+                Block* product=element_wise_multiplication(cropped_output_block,Z_i);
 
 
+                append_Block(&tmp_delta,&product);
 
-    /* the challenge now is to calculate the actual delta
+            }
 
-    based on the weights, the next deltas and the output ;
+            Block *mean_tmp_delta=mean_block(tmp_delta);
+            append_Block(&small_delta,&mean_tmp_delta);
 
-    */
+        }
+
+        *(deltas->blocks+index_nbr_kernels)=small_delta;
+    }
+
 
 }
 
@@ -2859,12 +2860,40 @@ Block* mean_block(Block* block){
 }
 
 
+Block* mean_over_blocks(Blocks* blocks){
+
+    Block* output=initialize_Block(1);
+
+    uint32_t index_length, index_depth;
+
+    for(index_depth=0;index_depth<blocks->blocks[0]->depth;index_depth++){
+
+        Block* tmp=initialize_Block(1);
+        for(index_length=0;index_length<blocks->length;index_length++){
+
+                Block* wanted_depth_from_blocks=extract_from_Blocks(blocks,index_length);
+                Block* wanted_depth_from_block=get_one_dimension_from_block(wanted_depth_from_blocks,index_depth);
+                append_Block(&tmp,&wanted_depth_from_block);
+
+        }
+
+        Block* wanted_mean=mean_block(tmp);
+        append_Block(&output,&wanted_mean);
+
+    }
+
+    return output;
+
+}
+
+
 void append_Block(Block** main_block, Block** block){
 
 
     if(!test_block_null_dimension(*main_block)) {
 
             *main_block=*block;
+
 
     }
 
@@ -2888,6 +2917,7 @@ void append_Block(Block** main_block, Block** block){
     uint32_t ind_d,ind_h,ind_w;
 
     for(ind_d=0;ind_d<(*main_block)->depth;ind_d++){
+
         *(new_main_block->matrix+ind_d)=initialize_double_pointer_double((*main_block)->height);
         for(ind_h=0;ind_h<new_main_block->height;ind_h++){
 
@@ -2898,7 +2928,6 @@ void append_Block(Block** main_block, Block** block){
             }
         }
     }
-
 
     for(ind_d=(*main_block)->depth;ind_d<new_main_block->depth;ind_d++){
         *(new_main_block->matrix+ind_d)=initialize_double_pointer_double((*block)->height);
@@ -2913,8 +2942,6 @@ void append_Block(Block** main_block, Block** block){
     }
 
     *main_block=new_main_block;
-
-    free(new_main_block);
 
     }
 
@@ -2976,9 +3003,8 @@ void model_code(){
     add_CONV(&model,10,2,2,7,&relu);
     add_POOL(&model,2,2,3,"avg");
     add_CONV(&model,5,2,2,5,&relu);
-
-
     add_POOL(&model,1,1,5,"max");
+
     add_FLAT(&model);
     add_FCAF(&model,&tanh,100);
     add_FC(&model,&sigmoid,80);
@@ -3020,24 +3046,13 @@ int main()
 {
 
     //Debugging the code
-    //model_code();
+    model_code();
 
-    Block* b0;
-    Block* b1;
-    Block* b=initialize_Block(1);
-
-    create_Block(&b0,5,2,2,"random","float");
-    create_Block(&b1,5,2,2,"random","float");
-
-    b=element_wise_multiplication(b0,b1);
-
-    //
-    display_Block(b);
-    //display_Block(b1);
-    //display_Block(b);
 
     printf("\nDONE :))) ! \n\n");
 
     return 0;
 }
+
+
 
