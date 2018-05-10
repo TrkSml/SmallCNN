@@ -560,7 +560,6 @@ LAYER* pool_layer(paramsPOOL prmpool, Block* input){
 
     write("---------------");
     write("--cash--");
-    shape_block(cash);
 
 
     write("---------------");
@@ -924,6 +923,16 @@ double deriv_tanh(double x){
     return 1-pow(tanh(x),2);
 }
 
+double id(double x){
+
+    return x;
+}
+
+double deriv_id(double x){
+
+    return 1.0;
+}
+
 
 typedef struct{
     double (*add)(double,double);
@@ -942,12 +951,14 @@ Operator Op ={add:add__,substract:substract__,multiply:multiply__};
 Object Tanh_Ojb={function:tanh, prime:deriv_tanh};
 Object Sigm_Obj={function:sigmoid, prime:deriv_sigmoid};
 Object Relu_Obj={function:relu, prime:deriv_relu};
+Object Id_Obj={function:id, prime:deriv_id};
 
 Object function_to_object(double (*function)(double)){
 
     if(function==tanh) return Tanh_Ojb;
     if(function==sigmoid) return Sigm_Obj;
     if(function==relu) return Relu_Obj;
+    if(function==id) return Id_Obj;
 
 }
 
@@ -1859,11 +1870,167 @@ typedef struct{
 
 }Entity;
 
+
+typedef struct{
+
+    uint32_t index_height_after_pooling;
+    uint32_t index_width_after_pooling;
+
+    uint32_t index_height_before_pooling;
+    uint32_t index_width_before_pooling;
+
+    uint32_t depth;
+
+}Ref_for_pooling;
+
+
+typedef struct{
+
+    uint32_t index_height_before_pooling;
+    uint32_t index_width_before_pooling;
+
+    uint32_t depth;
+
+
+}Cumulator_for_pooling;
+
+
+typedef struct References__{
+
+    Ref_for_pooling references;
+    struct References__* next_ref;
+
+}References ;
+
+
+typedef struct Cumulator__{
+
+    Cumulator_for_pooling cumulator;
+    struct Cumulator__* next_cumulator;
+
+}Cumulator ;
+
+
+int check_cumul_exists(Cumulator_for_pooling* ref,uint32_t index_height_before_pooling,
+                                                uint32_t index_width_before_pooling,
+                                                uint32_t depth){
+
+    return ref->index_height_before_pooling==index_height_before_pooling &&
+           ref->index_width_before_pooling==index_width_before_pooling &&
+           ref->depth==depth;
+
+}
+
+
+
+void create_cumulating_for_pooling(Cumulator** cumulator,
+                                                  uint32_t ind_h_bf_pool,
+                                                  uint32_t ind_w_bf_pool,
+                                                  uint32_t depth
+                                                  ){
+
+    if(*cumulator==NULL){
+
+        *cumulator=(Cumulator*)malloc(sizeof(Cumulator));
+        Cumulator_for_pooling* cfp=(Cumulator_for_pooling*)malloc(sizeof(Cumulator_for_pooling));
+
+        cfp->depth=depth;
+        cfp->index_height_before_pooling=ind_h_bf_pool;
+        cfp->index_width_before_pooling=ind_w_bf_pool;
+        cfp->counter=1;
+
+        (*cumulator)->cumulator=*cfp;
+
+        (*cumulator)->next_cumulator=NULL;
+
+    }
+    else{
+
+        Cumulator* current=*cumulator;
+        int change=0;
+        while(current->next_cumulator){
+
+            if(check_cumul_exists(&current->cumulator,ind_h_bf_pool,ind_w_bf_pool,depth)){
+                change++;
+                break;
+            }
+            current=current->next_cumulator;
+        }
+
+        if(check_cumul_exists(&current->cumulator,ind_h_bf_pool,ind_w_bf_pool,depth)){
+            change++;
+        }
+
+        if(!change){
+
+            Cumulator_for_pooling* cfp=(Cumulator_for_pooling*)malloc(sizeof(Cumulator_for_pooling));
+
+            cfp->depth=depth;
+            cfp->index_height_before_pooling=ind_h_bf_pool;
+            cfp->index_width_before_pooling=ind_w_bf_pool;
+            cfp->counter=1;
+
+            current->next_cumulator=cfp;
+            current->next_cumulator->next_cumulator=NULL;
+
+        }
+    }
+
+}
+
+
+
+void create_ref_for_pooling(Ref_for_pooling** ref, uint32_t ind_h_af_pool,
+                                                  uint32_t ind_w_af_pool,
+                                                  uint32_t ind_h_bf_pool,
+                                                  uint32_t ind_w_bf_pool,
+                                                  uint32_t depth
+                                                  ){
+
+    *ref=(Ref_for_pooling*)malloc(sizeof(Ref_for_pooling));
+
+    (*ref)->depth=depth;
+
+    (*ref)->index_height_after_pooling=ind_h_af_pool;
+    (*ref)->index_width_after_pooling=ind_w_af_pool;
+
+    (*ref)->index_height_before_pooling=ind_h_bf_pool;
+    (*ref)->index_width_before_pooling=ind_w_bf_pool;
+
+}
+
+
+void add_pooling_references(References** ref, Ref_for_pooling** ref_for_pooling){
+
+    if(*ref==NULL){
+            *ref=*ref_for_pooling;
+            (*ref)->next_ref=NULL;
+        }
+
+    else{
+
+        References* current_ref=*ref;
+        while(current_ref->next_ref){
+
+        if
+        current_ref=current_ref->next_ref;
+
+        }
+
+        current_ref->next_ref=(Ref_for_pooling*)malloc(sizeof(Ref_for_pooling));
+        current_ref->next_ref=*ref_for_pooling;
+
+    }
+}
+
+
 typedef struct{
     Grid* special_grid;
     Grid* pooled;
+    References* ref_s;
 
 }POOL_OUTPUT;
+
 
 Entity* Pooling_On_Extracted_Grid(Grid* block, char* choice){
 
@@ -1993,7 +2160,7 @@ POOL_OUTPUT* Pooling_On_Grid(Grid* grid,unsigned int size_kernel,unsigned int st
 
             special_grid->grid[index_height_output-size_half_kernel+ent->index_height]
                           [index_width_output-size_half_kernel+ent->index_width]
-                           = 1.0 ;
+                           = ent->value ;
         }
         else{
 
@@ -2625,7 +2792,7 @@ void calculate_deltas_fc(Model** model, LAYER** layer){
         }
 }
 
-void calculate_deltas__pool(Model** model, LAYER** layer){
+void calculate_deltas_pool(Model** model, LAYER** layer){
 
     if((*layer)->name!=POOL)
         {
@@ -2640,7 +2807,7 @@ void calculate_deltas__pool(Model** model, LAYER** layer){
         if((*layer)->next_layer->name==FLATTEN){
 
             Block* deltas=(*layer)->next_layer->deltas->block;
-            Block* block_for_dimensions=(*layer)->next_layer->input_data->block;
+            Block* block_for_dimensions=(*layer)->output_data->block;
 
             Block* current_deltas=initialize_Block(1);
 
@@ -2653,26 +2820,25 @@ void calculate_deltas__pool(Model** model, LAYER** layer){
             current_deltas->matrix=initialize_triple_pointer_double(current_deltas->depth);
 
             for(ind_d=0;ind_d<current_deltas->depth;ind_d++){
-                double** col=initialize_double_pointer_double(current_deltas->height);
+                *(current_deltas->matrix+ind_d)=initialize_double_pointer_double(current_deltas->height);
 
                 for(ind_h=0;ind_h<current_deltas->height;ind_h++){
-                    double* row=initialize_pointer_double(current_deltas->width);
+                    *(*(current_deltas->matrix+ind_d)+ind_h)=initialize_pointer_double(current_deltas->width);
 
                     for(ind_w=0;ind_w<current_deltas->width;ind_w++){
 
-                        *(row+ind_w)=deltas->matrix[current][0][0];
+                        *(*(*(current_deltas->matrix+ind_d)+ind_h)+ind_w)=deltas->matrix[current][0][0];
                         current++;
                     }
-                    *(col+ind_h)=row;
                 }
-                *(current_deltas->matrix+ind_d)=col;
             }
 
-            shape_block(current_deltas);
             (*layer)->deltas->block=current_deltas;
+            display_Block((*layer)->cash->block);
         }
 
     }
+
     //go through each delta output and reconstruct a decent delta input
 }
 
@@ -2759,7 +2925,7 @@ Block* crop_Block(Block* to_be_cropped, Block* to_be_used){
 }
 
 
-void calculate_deltas__conv(Model** model, LAYER** layer){
+void calculate_deltas_conv(Model** model, LAYER** layer){
 
     Block* final_delta=initialize_Block(1);
     Blocks* weights=(*layer)->kernels->blocks;
@@ -2818,6 +2984,7 @@ void calculate_deltas__conv(Model** model, LAYER** layer){
 
         *(deltas->blocks+index_nbr_kernels)=small_delta;
     }
+
 
 
 }
@@ -2988,7 +3155,7 @@ void model_code(){
     //declaring the input | output
     Block* X;
 
-    create_Block(&X,4,179,179,"random","float");
+    create_Block(&X,4,80,80,"random","float");
 
     Grid* Y=fill_index(12,2);
     //create_Grid(&Y,5,5,"random","int");
@@ -3001,9 +3168,11 @@ void model_code(){
     add_CONV(&model,5,1,1,7,&relu);
     add_POOL(&model,1,1,5,"max");
     add_CONV(&model,10,2,2,7,&relu);
-    add_POOL(&model,2,2,3,"avg");
+    add_POOL(&model,2,2,3,"max");
     add_CONV(&model,5,2,2,5,&relu);
     add_POOL(&model,1,1,5,"max");
+    //display_Block((model)->final_layer->cash->block);
+
 
     add_FLAT(&model);
     add_FCAF(&model,&tanh,100);
@@ -3034,10 +3203,10 @@ void model_code(){
 
     calculate_deltas_fc(&model,&(l_p->previous_layer));
 
-    calculate_deltas__pool(&model,&(l_p->previous_layer->previous_layer));
+    calculate_deltas_pool(&model,&(l_p->previous_layer->previous_layer));
     //transform_deltas_flatten(&model,&(l_1->previous_layer->previous_layer->previous_layer->previous_layer->previous_layer->previous_layer));
 
-    calculate_deltas__conv(&model,&(l_p->previous_layer->previous_layer->previous_layer));
+    calculate_deltas_conv(&model,&(l_p->previous_layer->previous_layer->previous_layer));
 
 }
 
