@@ -1979,8 +1979,8 @@ void create_cumulating_for_pooling(Cumulator** cumulator,
 }
 
 
-
-void create_ref_for_pooling(Ref_for_pooling** ref, uint32_t ind_h_af_pool,
+//****//
+void create_ref_for_pooling(Ref_for_pooling** ref,uint32_t ind_h_af_pool,
                                                   uint32_t ind_w_af_pool,
                                                   uint32_t ind_h_bf_pool,
                                                   uint32_t ind_w_bf_pool,
@@ -1999,10 +1999,16 @@ void create_ref_for_pooling(Ref_for_pooling** ref, uint32_t ind_h_af_pool,
 
 }
 
+//****//
+void add_pooling_references(References** ref, Cumulator** cumulator, Ref_for_pooling** ref_for_pooling){
 
-void add_pooling_references(References** ref, Ref_for_pooling** ref_for_pooling){
+    create_cumulating_for_pooling(cumulator,
+                                        (*ref)->references->index_height_before_pooling,
+                                        (*ref)->references->index_width_before_pooling,
+                                        (*ref)->references->dept);
 
     if(*ref==NULL){
+
             *ref=*ref_for_pooling;
             (*ref)->next_ref=NULL;
         }
@@ -2012,7 +2018,6 @@ void add_pooling_references(References** ref, Ref_for_pooling** ref_for_pooling)
         References* current_ref=*ref;
         while(current_ref->next_ref){
 
-        if
         current_ref=current_ref->next_ref;
 
         }
@@ -2160,7 +2165,7 @@ POOL_OUTPUT* Pooling_On_Grid(Grid* grid,unsigned int size_kernel,unsigned int st
 
             special_grid->grid[index_height_output-size_half_kernel+ent->index_height]
                           [index_width_output-size_half_kernel+ent->index_width]
-                           = ent->value ;
+                           = 1.0 ;
         }
         else{
 
