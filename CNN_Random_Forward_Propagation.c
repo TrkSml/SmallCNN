@@ -132,8 +132,8 @@ typedef struct params_FC paramsFC;
 //2D output
 //After single convolution
 typedef struct {
-   uint32_t width;
-   uint32_t height;
+    uint32_t width;
+    uint32_t height;
     double** grid;
 
 } Grid;
@@ -141,9 +141,9 @@ typedef struct {
 //3D Block for a single
 typedef struct{
 
-   uint32_t depth;
-   uint32_t width;
-   uint32_t height;
+    uint32_t depth;
+    uint32_t width;
+    uint32_t height;
     double*** matrix;
 
 }Block;
@@ -205,6 +205,83 @@ typedef union data_{
 
 }data;
 
+
+typedef struct node{
+    uint32_t index;
+    double value;
+
+}node;
+
+
+typedef struct pair
+{
+  node max_node;
+  node min_node;
+}pair;
+
+
+typedef struct{
+
+    uint32_t index_height_after_pooling;
+    uint32_t index_width_after_pooling;
+
+    uint32_t index_height_before_pooling;
+    uint32_t index_width_before_pooling;
+
+
+}Ref_for_pooling;
+
+
+typedef struct{
+
+    uint32_t index_height_before_pooling;
+    uint32_t index_width_before_pooling;
+
+    int counter;
+
+
+}Cumulator_for_pooling;
+
+
+typedef struct References__{
+
+    Ref_for_pooling references;
+    struct References__* next_ref;
+
+}References ;
+
+
+typedef struct Cumulator__{
+
+    Cumulator_for_pooling *cumulator;
+    struct Cumulator__* next_cumulator;
+
+}Cumulator ;
+
+
+typedef struct{
+
+    Grid* special_grid;
+    Grid* pooled;
+
+}POOL_OUTPUT;
+
+
+typedef struct{
+
+    References* ref_s;
+    Cumulator* cml_s;
+
+}POOL_CUMUL_OUTPUT;
+
+typedef struct{
+
+    POOL_OUTPUT* pool_output;
+    POOL_CUMUL_OUTPUT* pool_cumul_output;
+
+}POOL_CASH;
+
+
 typedef struct LAYER_{
 
     data* input_data;
@@ -215,6 +292,7 @@ typedef struct LAYER_{
     Kernels* kernels;
     Kernels* deltas;
     Kernels* cash;
+    POOL_CUMUL_OUTPUT* cash_for_pooling;
 
     TYPE_LAYER name;
 
@@ -222,6 +300,7 @@ typedef struct LAYER_{
     struct LAYER_* previous_layer;
 
 }LAYER;
+
 
 
 typedef struct {
@@ -235,18 +314,6 @@ typedef struct {
 
 }Model;
 
-
-typedef struct node{
-    uint32_t index;
-    double value;
-
-}node;
-
-typedef struct pair
-{
-  node max_node;
-  node min_node;
-}pair;
 
 pair getMinMax(Grid* grid, uint32_t low, uint32_t high)
 {
@@ -363,13 +430,16 @@ void Convolution(Block** bl_output,
                  uint32_t stride,
                  uint32_t padding);
 
+
 void Pooling(Block** bl_output,
              Block **input,
-             Block **cash,
+             Block** cash,
+             POOL_CUMUL_OUTPUT** pco,
              uint32_t size_kernel,
-             uint32_t stride,
-             uint32_t padding,
+             unsigned int stride,
+             unsigned int padding,
              char* choice);
+
 
 void Flatten(Block **output,
               Block **input);
@@ -428,11 +498,6 @@ void initialize_layer_content_fc(LAYER** layer, FullyConnected** input){
     (*layer)->deltas->psool=NULL;
     (*layer)->deltas->grid=NULL;
 
-    (*layer)->cash->blocks=NULL;
-    (*layer)->cash->block=NULL;
-    (*layer)->cash->psool=NULL;
-    (*layer)->cash->grid=NULL;
-
     (*layer)->previous_layer=NULL;
     (*layer)->next_layer=NULL;
 
@@ -467,6 +532,8 @@ void initialize_layer_content_Block(LAYER** layer, Block** input){
     (*layer)->cash->block=NULL;
     (*layer)->cash->psool=NULL;
     (*layer)->cash->grid=NULL;
+
+    (*layer)->cash_for_pooling=NULL;
 
     (*layer)->previous_layer=NULL;
     (*layer)->next_layer=NULL;
@@ -544,12 +611,14 @@ LAYER* pool_layer(paramsPOOL prmpool, Block* input){
 
     Block* output;
     Block* cash;
+    POOL_CUMUL_OUTPUT* pco;
 
     layer->kernels->psool=(pool_information*)malloc(sizeof(pool_information));
     layer->kernels->psool->size_kernel=prmpool.kernel_size;
 
 
     Pooling(&output,&input,&cash,
+                &pco,
                 prmpool.kernel_size,
                 prmpool.stride,
                 prmpool.padding,
@@ -564,6 +633,7 @@ LAYER* pool_layer(paramsPOOL prmpool, Block* input){
 
     write("---------------");
 
+    layer->cash_for_pooling=pco;
     layer->input_data->block=input;
     layer->cash->block=cash;
     layer->output_data->block=output;
@@ -1871,76 +1941,53 @@ typedef struct{
 }Entity;
 
 
-typedef struct{
-
-    uint32_t index_height_after_pooling;
-    uint32_t index_width_after_pooling;
-
-    uint32_t index_height_before_pooling;
-    uint32_t index_width_before_pooling;
-
-    uint32_t depth;
-
-}Ref_for_pooling;
-
-
-typedef struct{
-
-    uint32_t index_height_before_pooling;
-    uint32_t index_width_before_pooling;
-
-    uint32_t depth;
-
-
-}Cumulator_for_pooling;
-
-
-typedef struct References__{
-
-    Ref_for_pooling references;
-    struct References__* next_ref;
-
-}References ;
-
-
-typedef struct Cumulator__{
-
-    Cumulator_for_pooling cumulator;
-    struct Cumulator__* next_cumulator;
-
-}Cumulator ;
-
 
 int check_cumul_exists(Cumulator_for_pooling* ref,uint32_t index_height_before_pooling,
-                                                uint32_t index_width_before_pooling,
-                                                uint32_t depth){
+                                                  uint32_t index_width_before_pooling){
+
 
     return ref->index_height_before_pooling==index_height_before_pooling &&
-           ref->index_width_before_pooling==index_width_before_pooling &&
-           ref->depth==depth;
+           ref->index_width_before_pooling==index_width_before_pooling ;
 
 }
 
 
+int search_for_cumulator(Cumulator* cumulator,
+                                uint32_t h_before_pooling,
+                                uint32_t w_before_pooling){
+
+    Cumulator* current=cumulator;
+    while(current){
+        if(check_cumul_exists(current->cumulator,h_before_pooling,w_before_pooling))
+        {
+            break;
+        }
+
+    }
+
+    if(current) return current->cumulator->counter;
+
+    else return -1 ;
+
+
+}
 
 void create_cumulating_for_pooling(Cumulator** cumulator,
                                                   uint32_t ind_h_bf_pool,
-                                                  uint32_t ind_w_bf_pool,
-                                                  uint32_t depth
+                                                  uint32_t ind_w_bf_pool
                                                   ){
+
 
     if(*cumulator==NULL){
 
         *cumulator=(Cumulator*)malloc(sizeof(Cumulator));
         Cumulator_for_pooling* cfp=(Cumulator_for_pooling*)malloc(sizeof(Cumulator_for_pooling));
 
-        cfp->depth=depth;
         cfp->index_height_before_pooling=ind_h_bf_pool;
         cfp->index_width_before_pooling=ind_w_bf_pool;
         cfp->counter=1;
 
-        (*cumulator)->cumulator=*cfp;
-
+        (*cumulator)->cumulator=cfp;
         (*cumulator)->next_cumulator=NULL;
 
     }
@@ -1948,30 +1995,44 @@ void create_cumulating_for_pooling(Cumulator** cumulator,
 
         Cumulator* current=*cumulator;
         int change=0;
+
         while(current->next_cumulator){
 
-            if(check_cumul_exists(&current->cumulator,ind_h_bf_pool,ind_w_bf_pool,depth)){
-                change++;
-                break;
+                if(check_cumul_exists(current->cumulator,ind_h_bf_pool,ind_w_bf_pool)){
+
+                        current->cumulator->counter++;
+                        change++;
+
+                }
+
+                else {
+
+                    current=current->next_cumulator;
+
+                }
+
             }
-            current=current->next_cumulator;
-        }
 
-        if(check_cumul_exists(&current->cumulator,ind_h_bf_pool,ind_w_bf_pool,depth)){
+        Cumulator* previous_cumulatr=current;
+
+        if(check_cumul_exists(current->cumulator,ind_h_bf_pool,ind_w_bf_pool)){
+
+            current->cumulator->counter++;
             change++;
+            current=current->next_cumulator;
+
         }
 
-        if(!change){
+        if(!current && !change){
 
             Cumulator_for_pooling* cfp=(Cumulator_for_pooling*)malloc(sizeof(Cumulator_for_pooling));
 
-            cfp->depth=depth;
             cfp->index_height_before_pooling=ind_h_bf_pool;
             cfp->index_width_before_pooling=ind_w_bf_pool;
             cfp->counter=1;
 
-            current->next_cumulator=cfp;
-            current->next_cumulator->next_cumulator=NULL;
+            previous_cumulatr->next_cumulator=cfp;
+            previous_cumulatr->next_cumulator->next_cumulator=NULL;
 
         }
     }
@@ -1983,13 +2044,10 @@ void create_cumulating_for_pooling(Cumulator** cumulator,
 void create_ref_for_pooling(Ref_for_pooling** ref,uint32_t ind_h_af_pool,
                                                   uint32_t ind_w_af_pool,
                                                   uint32_t ind_h_bf_pool,
-                                                  uint32_t ind_w_bf_pool,
-                                                  uint32_t depth
+                                                  uint32_t ind_w_bf_pool
                                                   ){
 
     *ref=(Ref_for_pooling*)malloc(sizeof(Ref_for_pooling));
-
-    (*ref)->depth=depth;
 
     (*ref)->index_height_after_pooling=ind_h_af_pool;
     (*ref)->index_width_after_pooling=ind_w_af_pool;
@@ -2002,10 +2060,10 @@ void create_ref_for_pooling(Ref_for_pooling** ref,uint32_t ind_h_af_pool,
 //****//
 void add_pooling_references(References** ref, Cumulator** cumulator, Ref_for_pooling** ref_for_pooling){
 
-    create_cumulating_for_pooling(cumulator,
-                                        (*ref)->references->index_height_before_pooling,
-                                        (*ref)->references->index_width_before_pooling,
-                                        (*ref)->references->dept);
+    create_cumulating_for_pooling(cumulator,\
+                                        (*ref_for_pooling)->index_height_before_pooling,
+                                        (*ref_for_pooling)->index_width_before_pooling);
+
 
     if(*ref==NULL){
 
@@ -2016,25 +2074,19 @@ void add_pooling_references(References** ref, Cumulator** cumulator, Ref_for_poo
     else{
 
         References* current_ref=*ref;
-        while(current_ref->next_ref){
-
+        while(current_ref->next_ref)
+        {
         current_ref=current_ref->next_ref;
-
         }
 
-        current_ref->next_ref=(Ref_for_pooling*)malloc(sizeof(Ref_for_pooling));
-        current_ref->next_ref=*ref_for_pooling;
+
+        current_ref->next_ref=(References*)malloc(sizeof(References));
+        current_ref->next_ref->references=**ref_for_pooling;
+        current_ref->next_ref->next_ref=NULL;
 
     }
 }
 
-
-typedef struct{
-    Grid* special_grid;
-    Grid* pooled;
-    References* ref_s;
-
-}POOL_OUTPUT;
 
 
 Entity* Pooling_On_Extracted_Grid(Grid* block, char* choice){
@@ -2094,6 +2146,22 @@ Entity* Pooling_On_Extracted_Grid(Grid* block, char* choice){
     }
 
 
+void display_cumulator(Cumulator** cum_){
+
+    Cumulator* cm=*cum_;
+    while(cm){
+
+        write("The obtained cumulators for the actual grid .. ");
+        printf(" height %u | the width %u | the occurence %u ",cm->cumulator->index_height_before_pooling,
+                                                               cm->cumulator->index_width_before_pooling,
+                                                               cm->cumulator->counter);
+
+        cm=cm->next_cumulator;
+
+    }
+
+}
+
 POOL_OUTPUT* Pooling_On_Grid(Grid* grid,unsigned int size_kernel,unsigned int stride,unsigned int padding,char* choice){
 
     if(!test_grid_null_dimension(grid)){
@@ -2111,10 +2179,15 @@ POOL_OUTPUT* Pooling_On_Grid(Grid* grid,unsigned int size_kernel,unsigned int st
 
 
    POOL_OUTPUT* po=(POOL_OUTPUT*)malloc(sizeof(POOL_OUTPUT));
+   POOL_CUMUL_OUTPUT* pco=(POOL_CUMUL_OUTPUT*)malloc(sizeof(POOL_CUMUL_OUTPUT));
+   POOL_CASH* p=(POOL_CASH*)malloc(sizeof(POOL_CASH));
+
    uint32_t height=grid->height;
 
    grid=AddPadding_Grid(&grid,padding);
    Grid* special_grid=NULL;
+   References* ref_s=NULL;
+   Cumulator* cml_s=NULL;
 
    if(choice=="avg"){
 
@@ -2163,6 +2236,16 @@ POOL_OUTPUT* Pooling_On_Grid(Grid* grid,unsigned int size_kernel,unsigned int st
 
             *(row+(index_width_output-begin_point_width)/stride)=ent->value;
 
+            Ref_for_pooling* ref_for_pooling;
+            create_ref_for_pooling(&ref_for_pooling,(index_height_output-begin_point_height)/stride,
+                                          (index_width_output-begin_point_width)/stride,
+                                          index_height_output-size_half_kernel+ent->index_height,
+                                          index_width_output-size_half_kernel+ent->index_width
+                                          );
+
+            add_pooling_references(&ref_s,&cml_s,&ref_for_pooling);
+
+
             special_grid->grid[index_height_output-size_half_kernel+ent->index_height]
                           [index_width_output-size_half_kernel+ent->index_width]
                            = 1.0 ;
@@ -2177,22 +2260,30 @@ POOL_OUTPUT* Pooling_On_Grid(Grid* grid,unsigned int size_kernel,unsigned int st
         }
         *(output_pooled_grid->grid+(index_height_output-begin_point_height)/stride)=row;
 
-
-
     }
 
+    pco->cml_s=cml_s;
+    pco->ref_s=ref_s;
 
     po->pooled=output_pooled_grid;
     po->special_grid=special_grid;
 
-    return po;
+    p->pool_cumul_output=pco;
+    p->pool_output=po;
+
+    return p;
 
     }
 }
 
 
 // We will continue at this level
-void Pooling(Block** bl_output,Block **input,Block** cash, uint32_t size_kernel,unsigned int stride,unsigned int padding, char* choice){
+void Pooling(Block** bl_output,Block **input,Block** cash,\
+                                             POOL_CUMUL_OUTPUT** pco_in,
+                                             uint32_t size_kernel,
+                                             unsigned int stride,
+                                             unsigned int padding,
+                                             char* choice){
 
     current_Layer("Pooling");
 
@@ -2205,6 +2296,7 @@ void Pooling(Block** bl_output,Block **input,Block** cash, uint32_t size_kernel,
 
     Block* output=(Block*)malloc(sizeof(Block));
     Block* cash_bis=(Block*)malloc(sizeof(Block));
+    POOL_CUMUL_OUTPUT* pco=(POOL_CUMUL_OUTPUT*)malloc(sizeof(POOL_CUMUL_OUTPUT));
 
     output->height=determine_size_output((*input)->height, size_kernel, padding, stride);
     output->width=determine_size_output((*input)->width, size_kernel, padding, stride);
@@ -2220,23 +2312,22 @@ void Pooling(Block** bl_output,Block **input,Block** cash, uint32_t size_kernel,
 
     // We have now to fill the output_matrix;
 
-
-
     uint32_t index_output_depth;
 
     for(index_output_depth=0;index_output_depth<output->depth;index_output_depth++){
 
 
         Grid* grid_from_current_block=extract_grid_from_given_depth(input,index_output_depth);
-        POOL_OUTPUT* pooled_po=Pooling_On_Grid(grid_from_current_block,size_kernel,stride,padding,choice);
+        POOL_CASH* po=Pooling_On_Grid(grid_from_current_block,size_kernel,stride,padding,choice);
 
-        *(output->matrix+index_output_depth)=pooled_po->pooled->grid;
-        *(cash_bis->matrix+index_output_depth)=pooled_po->special_grid->grid;
+        *(pco+index_output_depth)=*(po->pool_cumul_output);
+        *(output->matrix+index_output_depth)=po->pool_output->pooled->grid;
+        *(cash_bis->matrix+index_output_depth)=po->pool_output->special_grid->grid;
 
 
 
        free(grid_from_current_block);
-       free(pooled_po);
+       free(po);
 
 
     }
@@ -2245,6 +2336,7 @@ void Pooling(Block** bl_output,Block **input,Block** cash, uint32_t size_kernel,
 
     *bl_output=output;
     *cash=cash_bis;
+    *pco_in=pco;
 
     }
 }
@@ -2809,12 +2901,13 @@ void calculate_deltas_pool(Model** model, LAYER** layer){
 
     else{
 
+        Block* deltas=(*layer)->next_layer->deltas->block;
+        Block* current_deltas=NULL;
+
         if((*layer)->next_layer->name==FLATTEN){
 
-            Block* deltas=(*layer)->next_layer->deltas->block;
-            Block* block_for_dimensions=(*layer)->output_data->block;
-
             Block* current_deltas=initialize_Block(1);
+            Block* block_for_dimensions=(*layer)->output_data->block;
 
             current_deltas->width=block_for_dimensions->width;
             current_deltas->depth=block_for_dimensions->depth;
@@ -2839,8 +2932,46 @@ void calculate_deltas_pool(Model** model, LAYER** layer){
             }
 
             (*layer)->deltas->block=current_deltas;
-            display_Block((*layer)->cash->block);
+
+
         }
+
+
+        Block* block_for_dimensions_input=(*layer)->input_data->block;
+        POOL_CUMUL_OUTPUT* pco=(*layer)->cash_for_pooling;
+
+        Block* final_deltas;
+
+        create_Block(&final_deltas,block_for_dimensions_input->depth,
+                                   block_for_dimensions_input->height,
+                                   block_for_dimensions_input->width,
+                                   "zeros","float");
+
+        uint32_t ind_d;
+
+        for(ind_d=0;ind_d<final_deltas->depth;ind_d++){
+            // fix the problem
+            References* ref=pco->ref_s;
+            Cumulator* cuml=pco->cml_s;
+
+            References* marker=ref;
+            while(marker){
+
+                Ref_for_pooling rfp=marker->references;
+                final_deltas->matrix[ind_d][rfp.index_height_before_pooling][rfp.index_width_before_pooling]+=\
+                                current_deltas->matrix[ind_d][rfp.index_height_after_pooling]\
+                                                              [rfp.index_width_after_pooling];
+
+                final_deltas->matrix[ind_d][rfp.index_height_before_pooling]
+                                           [rfp.index_width_before_pooling]/=
+                                                     search_for_cumulator(cuml,
+                                                     rfp.index_height_before_pooling,
+                                                     rfp.index_width_before_pooling);
+
+                marker=marker->next_ref;
+
+                }
+            }
 
     }
 
