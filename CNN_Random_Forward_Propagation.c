@@ -278,6 +278,7 @@ typedef struct{
 
     POOL_CUMUL_OUTPUT_DATA* p_c_o_d;
     uint32_t stride;
+    uint32_t kernel;
 
 }POOL_CUMUL_OUTPUT;
 
@@ -288,6 +289,12 @@ typedef struct{
 
 }POOL_CASH;
 
+typedef struct{
+
+    uint16_t stride;
+    uint16_t kernel;
+
+}CONV_CASH;
 
 typedef struct LAYER_{
 
@@ -300,6 +307,7 @@ typedef struct LAYER_{
     Kernels* deltas;
     Kernels* cash;
     POOL_CUMUL_OUTPUT* cash_for_pooling;
+    CONV_CASH* cash_for_conv;
 
     TYPE_LAYER name;
 
@@ -434,6 +442,7 @@ Block* mean_block(Block* block);
 
 void Convolution(Block** bl_output,
                  Block **input,
+                 CONV_CASH** conv_cash,
                  Blocks * kernels,
                  uint32_t stride,
                  uint32_t padding);
@@ -559,6 +568,7 @@ LAYER* conv_layer(paramsCONV prmconvs, Block* input){
     Block* output;
     Blocks* kernels;
     Blocks* deltas;
+    CONV_CASH* conv_cash;
 
     create_Blocks(&kernels,prmconvs.nbr_filters, input->depth,prmconvs.kernel_size,prmconvs.kernel_size,"random","float");
     create_Blocks(&deltas,prmconvs.nbr_filters, input->depth,prmconvs.kernel_size,prmconvs.kernel_size,"zeros","float");
@@ -569,6 +579,7 @@ LAYER* conv_layer(paramsCONV prmconvs, Block* input){
 
     Convolution(&output,
                 &input,
+                &conv_cash,
                 kernels,
                 prmconvs.stride,
                 prmconvs.padding);
@@ -580,6 +591,7 @@ LAYER* conv_layer(paramsCONV prmconvs, Block* input){
                             prmconvs.activation__
                             );
 
+    layer->cash_for_conv=conv_cash;
     layer->output_data->block=output;
     layer->activation__=prmconvs.activation__;
     layer->name=prmconvs.name;
@@ -1897,7 +1909,7 @@ Grid* convolve(Block* block, Block* kernel,unsigned int stride,unsigned int padd
 
 //Can either be used to define the input images or the N * filters
 
-void Convolution(Block** bl_output, Block **input, Blocks * kernels,unsigned int stride,unsigned int padding){
+void Convolution(Block** bl_output, Block **input, CONV_CASH** conv_cash, Blocks * kernels,unsigned int stride,unsigned int padding){
 
     current_Layer("Convolution");
 
@@ -1914,8 +1926,10 @@ void Convolution(Block** bl_output, Block **input, Blocks * kernels,unsigned int
         output->width=determine_size_output((*input)->width,kernels->blocks[0]->width, padding, stride);
         output->matrix=(double***)malloc(output->depth*sizeof(double**));
 
+        CONV_CASH* c_c=(CONV_CASH*)malloc(sizeof(CONV_CASH));
 
-        // We have now to fill the output_matrix;
+        c_c->kernel=kernels->blocks[0]->height;
+        c_c->stride=stride;
 
         uint32_t index_output_depth;
 
@@ -1928,6 +1942,7 @@ void Convolution(Block** bl_output, Block **input, Blocks * kernels,unsigned int
             free(grid);
 
         }
+        *conv_cash=c_c;
         *bl_output=output;
     }
 
@@ -2214,6 +2229,9 @@ POOL_CASH* Pooling_On_Grid(Grid* grid,unsigned int size_kernel,unsigned int stri
     output_pooled_grid->height=(end_point_height-begin_point_height)/stride+1;
     output_pooled_grid->width=(end_point_width-begin_point_width)/stride+1;
 
+    if(grid->height%2) output_pooled_grid->height++ ;
+    if(grid->width%2) output_pooled_grid->width++ ;
+
     output_pooled_grid->grid=(double**)malloc(output_pooled_grid->height*sizeof(double*));
 
     if(special_grid==NULL)
@@ -2269,6 +2287,7 @@ POOL_CASH* Pooling_On_Grid(Grid* grid,unsigned int size_kernel,unsigned int stri
 
     pco->p_c_o_d=pcod;
     pco->stride=stride;
+    pco->kernel=size_kernel;
 
     po->pooled=output_pooled_grid;
     po->special_grid=special_grid;
@@ -2341,6 +2360,7 @@ void Pooling(Block** bl_output,Block **input,Block** cash,\
 
     pco->p_c_o_d=pcod;
     pco->stride=stride;
+    pco->kernel=size_kernel;
 
     *bl_output=output;
     *cash=cash_bis;
@@ -2897,6 +2917,88 @@ void calculate_deltas_fc(Model** model, LAYER** layer){
         }
 }
 
+
+
+void process_Grid(Block** block, double value,\
+                         uint32_t depth,
+                         uint32_t begin_input_height,unsigned int end_input_height,\
+                         uint32_t begin_input_width,unsigned int end_input_width){
+
+
+    uint16_t index_width, index_height;
+
+    for(index_height=begin_input_height;index_height<end_input_height;index_height++){
+        for(index_width=begin_input_width;index_width<end_input_width;index_width++){
+
+                if((*block)->matrix[depth][index_height][index_width]){
+
+                (*block)->matrix[depth][index_height][index_width]+=value;
+                (*block)->matrix[depth][index_height][index_width]/=2;
+                }
+
+                else{
+
+                    (*block)->matrix[depth][index_height][index_width]=value;
+
+                }
+
+
+
+        }
+    }
+
+}
+
+
+
+void fill_current_deltas(Block** current_deltas, Block** deltas, uint32_t stride, uint32_t size_kernel){
+
+    uint32_t size_half_kernel=((size_kernel-1)/2);
+    uint32_t begin_point_height=size_half_kernel;
+    uint32_t end_point_height=(*current_deltas)->height-begin_point_height+1;
+
+    uint32_t begin_point_width=size_half_kernel;
+    uint32_t end_point_width=(*current_deltas)->width-begin_point_width+1;
+
+    uint16_t index_width, index_height, index_depth;
+
+    for(index_depth=0;index_depth<(*current_deltas)->depth;index_depth++){
+        for(index_height=begin_point_height;index_height<end_point_height;index_height+=stride){
+            for(index_width=begin_point_width;index_width<end_point_width;index_width+=stride){
+            /*
+
+            write("lol0");
+            shape_block(*current_deltas);
+            shape_block(*deltas);
+
+            printf("\nwidth : %d \n",index_width);
+            printf("\nheight : %d \n",index_height);
+            printf("\ndepth : %d \n",index_depth);
+
+            printf("\npooled width : %d \n",(index_width-begin_point_width)/stride);
+            printf("\npooled height : %d \n",(index_height-begin_point_height)/stride);
+            printf("\npooled depth : %d \n",index_depth);
+
+            */
+            double value=(*deltas)->matrix[index_depth]
+                                          [(int)(index_height-begin_point_height)/stride]
+                                          [(int)(index_width-begin_point_width)/stride];
+
+            process_Grid(current_deltas,value,\
+                                      index_depth,\
+                                      index_height-size_half_kernel,\
+                                      index_height+size_half_kernel+1,index_width-size_half_kernel,\
+                                      index_width+size_half_kernel+1);
+
+
+         }
+      }
+    }
+
+}
+
+
+
 void calculate_deltas_pool(Model** model, LAYER** layer){
 
     if((*layer)->name!=POOL)
@@ -2911,12 +3013,10 @@ void calculate_deltas_pool(Model** model, LAYER** layer){
 
         Block* deltas=(*layer)->next_layer->deltas->block;
 
-        Block* current_deltas=NULL;
-
         if((*layer)->next_layer->name==FLATTEN){
 
 
-            current_deltas=initialize_Block(1);
+            Block* current_deltas=initialize_Block(1);
             Block* block_for_dimensions=(*layer)->output_data->block;
 
             current_deltas->width=block_for_dimensions->width;
@@ -2941,18 +3041,10 @@ void calculate_deltas_pool(Model** model, LAYER** layer){
                 }
             }
 
-        }
-
-
-        if(!current_deltas) current_deltas=deltas;
-
-
 
         Block* block_for_dimensions_input=(*layer)->input_data->block;
         POOL_CUMUL_OUTPUT* pco_general=(*layer)->cash_for_pooling;
-
         POOL_CUMUL_OUTPUT_DATA* pco=pco_general->p_c_o_d;
-        uint32_t current_stride=pco_general->stride;
 
         Block* final_deltas;
 
@@ -2962,18 +3054,86 @@ void calculate_deltas_pool(Model** model, LAYER** layer){
                                    "zeros","float");
 
 
+        uint32_t ind_depth;
+
+        for(ind_depth=0;ind_depth<final_deltas->depth;ind_depth++){
+            // fix the problem
+
+            References* ref=pco[ind_depth].ref_s;
+            Cumulator* cuml=pco[ind_depth].cml_s;
+
+            References* marker=ref;
+
+            while(marker){
+
+                Ref_for_pooling rfp=marker->references;
+
+                uint32_t min__h=min(final_deltas->height-1,rfp.index_height_before_pooling);
+                uint32_t min__w=min(final_deltas->width-1,rfp.index_width_before_pooling);
+
+                final_deltas->matrix[ind_depth][min__h][min__w]+=\
+                                current_deltas->matrix[ind_depth][rfp.index_height_after_pooling]
+                                                              [rfp.index_width_after_pooling];
+
+
+                marker=marker->next_ref;
+
+                }
+
+                Cumulator* markercml=cuml;
+
+
+            while(markercml){
+
+                    Cumulator_for_pooling* rfp=markercml->cumulator;
+
+                    uint32_t min__h=min(final_deltas->height-1,rfp->index_height_before_pooling);
+                    uint32_t min__w=min(final_deltas->width-1,rfp->index_width_before_pooling);
+
+                    final_deltas->matrix[ind_depth][min__h][min__w]/=\
+                                                 search_for_cumulator(cuml,
+                                                 rfp->index_height_before_pooling,
+                                                 rfp->index_width_before_pooling);
+
+                    markercml=markercml->next_cumulator;
+
+                }
+
+            }
+
+            (*layer)->deltas->block=final_deltas;
+        }
+        else
+
+        {
+
+        Block* current_deltas;
+
+        Block* block_for_dimensions_input=(*layer)->input_data->block;
+        Block* block_for_dimensions_output=(*layer)->output_data->block;
+
+        create_Block(&current_deltas,block_for_dimensions_output->depth,
+                                     block_for_dimensions_output->height,
+                                     block_for_dimensions_output->width,
+                                     "zeros","float");
+
+        POOL_CUMUL_OUTPUT* pco_general=(*layer)->cash_for_pooling;
+        POOL_CUMUL_OUTPUT_DATA* pco=pco_general->p_c_o_d;
+
+        CONV_CASH* conv_cash=(*layer)->next_layer->cash_for_conv;
+        uint32_t current_stride=conv_cash->stride;
+        uint32_t current_kernel=conv_cash->kernel;
+
+        Block* final_deltas;
+
+        create_Block(&final_deltas,block_for_dimensions_input->depth,
+                                   block_for_dimensions_input->height,
+                                   block_for_dimensions_input->width,
+                                   "zeros","float");
+
+        fill_current_deltas(&current_deltas,&deltas,current_stride,current_kernel);
+
         uint32_t ind_d;
-
-        /*
-        write("calculating deltas .. ");
-        shape_block((*layer)->output_data->block);
-        shape_block(block_for_dimensions_input);
-
-        shape_block(current_deltas);
-        shape_block(final_deltas);
-        */
-
-        // creating the final deltas ..
 
         for(ind_d=0;ind_d<final_deltas->depth;ind_d++){
             // fix the problem
@@ -2990,18 +3150,9 @@ void calculate_deltas_pool(Model** model, LAYER** layer){
                 uint32_t min__h=min(final_deltas->height-1,rfp.index_height_before_pooling);
                 uint32_t min__w=min(final_deltas->width-1,rfp.index_width_before_pooling);
 
-                //printf("\n height %d | width %d :\n ",rfp.index_height_after_pooling,rfp.index_width_after_pooling);
-
-
-
-
-                /*
                 final_deltas->matrix[ind_d][min__h][min__w]+=\
                                 current_deltas->matrix[ind_d][rfp.index_height_after_pooling]
                                                               [rfp.index_width_after_pooling];
-
-*/
-                //write("ok lella");
 
 
                 marker=marker->next_ref;
@@ -3010,7 +3161,6 @@ void calculate_deltas_pool(Model** model, LAYER** layer){
 
                 Cumulator* markercml=cuml;
 
-            /*
             while(markercml){
 
                     Cumulator_for_pooling* rfp=markercml->cumulator;
@@ -3026,7 +3176,6 @@ void calculate_deltas_pool(Model** model, LAYER** layer){
                     markercml=markercml->next_cumulator;
 
                 }
-                */
             }
 
         (*layer)->deltas->block=final_deltas;
@@ -3034,6 +3183,7 @@ void calculate_deltas_pool(Model** model, LAYER** layer){
     }
 
     //go through each delta output and reconstruct a decent delta input
+    }
 }
 
 Block* extract_from_Blocks(Blocks* blocks, uint32_t index){
@@ -3093,10 +3243,12 @@ Block* crop_Block(Block* to_be_cropped, Block* to_be_used){
     Block* cropped=initialize_Block(1);
 
     cropped->depth=to_be_cropped->depth;
-    cropped->height=to_be_used->height;
-    cropped->width=to_be_used->width;
+    cropped->height=to_be_cropped->height;
+    cropped->width=to_be_cropped->width;
 
     cropped->matrix=initialize_triple_pointer_double(cropped->depth);
+
+    //put a reference of the smaller block
 
     uint32_t ind_d, ind_h, ind_w;
 
@@ -3105,10 +3257,14 @@ Block* crop_Block(Block* to_be_cropped, Block* to_be_used){
 
         for(ind_h=0;ind_h<cropped->height;ind_h++){
                 *(*(cropped->matrix+ind_d)+ind_h)=initialize_pointer_double(cropped->width);
-
+                printf("\n%d height \n",ind_h);
                 for(ind_w=0;ind_w<cropped->width;ind_w++){
-                    *(*(*(cropped->matrix+ind_d)+ind_h)+ind_w)=to_be_cropped->matrix[ind_d][ind_h][ind_w];
 
+                    *(*(*(cropped->matrix+ind_d)+ind_h)+ind_w)=to_be_cropped->matrix[ind_d][ind_h][ind_w];
+                    printf("\n%d width \n",ind_w);
+                    shape_block(to_be_cropped);
+                    shape_block(to_be_used);
+                    shape_block(cropped);
 
             }
         }
@@ -3129,6 +3285,10 @@ void calculate_deltas_conv(Model** model, LAYER** layer){
     Block* cash=(*layer)->cash->block;
     Block* next_cash=(*layer)->next_layer->cash->block;
 
+    write("begin");
+    display_Block(cash);
+    write("end");
+
     uint32_t depth_weights=weights->blocks[0]->depth;
     uint32_t depth_next_deltas=next_deltas->depth;
 
@@ -3138,7 +3298,6 @@ void calculate_deltas_conv(Model** model, LAYER** layer){
 
     uint32_t height_to_be_padded=cash->height-next_deltas->height+1;
     AddPadding_Block(&next_deltas,height_to_be_padded);
-
 
     uint32_t index_nbr_kernels;
 
@@ -3164,7 +3323,9 @@ void calculate_deltas_conv(Model** model, LAYER** layer){
                 get_Block_from_Grid(&output,&output_block);
 
                 Block* cropped_output_block=crop_Block(output_block,Z_i);
+
                 Block* product=element_wise_multiplication(cropped_output_block,Z_i);
+
 
                 append_Block(&tmp_delta,&product);
 
@@ -3362,7 +3523,7 @@ void model_code(){
     add_CONV(&model,5,1,1,7,&relu);
     add_POOL(&model,1,1,5,"max");
     add_CONV(&model,10,2,2,7,&relu);
-    add_POOL(&model,2,2,5,"max");
+    add_POOL(&model,1,1,5,"max");
     add_CONV(&model,5,2,2,5,&relu);
     add_POOL(&model,1,1,5,"max");
     //display_Block((model)->final_layer->cash->block);
@@ -3384,6 +3545,8 @@ void model_code(){
     LAYER* l=model->final_layer;
     LAYER* l_p=l_1->previous_layer->previous_layer->previous_layer->previous_layer->previous_layer;
 
+    LAYER* l_p_1=l_p->previous_layer->previous_layer->previous_layer->previous_layer;
+
     calculate_deltas_fc(&model,&l);
     calculate_deltas_fc(&model,&l_1);
 
@@ -3403,6 +3566,13 @@ void model_code(){
 
     write("next layer");
     calculate_deltas_pool(&model,&(l_p->previous_layer->previous_layer->previous_layer->previous_layer));
+
+    write("next layer conv");
+    calculate_deltas_conv(&model,&(l_p_1->previous_layer));
+
+    write("next layer pool");
+    calculate_deltas_pool(&model,&(l_p_1->previous_layer->previous_layer));
+    calculate_deltas_conv(&model,&(l_p_1->previous_layer->previous_layer->previous_layer));
 
 }
 
