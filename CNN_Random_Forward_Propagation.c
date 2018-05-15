@@ -326,6 +326,7 @@ typedef struct {
     LAYER* first_layer;
     LAYER* final_layer;
     uint32_t nbr_levels;
+    double learning_rate;
 
 }Model;
 
@@ -736,7 +737,7 @@ LAYER* fc_layer(paramsFC prmffc, FullyConnected* input){
 
 
 
-void create_Model(Model** model, Block* X, Grid *Y){
+void create_Model(Model** model, Block* X, Grid *Y, double learning_rate){
 
     *model=initialize_Model();
     (*model)->first_layer=NULL;
@@ -744,6 +745,7 @@ void create_Model(Model** model, Block* X, Grid *Y){
     (*model)->X=X;
     (*model)->Y=Y;
     (*model)->nbr_levels=0;
+    (*model)->learning_rate=learning_rate;
 
 }
 
@@ -2505,7 +2507,7 @@ void Stack_Blocks(int nbr_arguments,... ){
 
 }
 
-void grid_dot_mutiplication(Grid** output_grid, Grid** grid1, Grid** grid2){
+void grid_dot_mutiplication(Grid** o_g, Grid** grid1, Grid** grid2){
 
     if(!test_for_grid_dot_multiplication(*grid1,*grid2)){
 
@@ -2517,22 +2519,22 @@ void grid_dot_mutiplication(Grid** output_grid, Grid** grid1, Grid** grid2){
 
 
 
-        *output_grid=(Grid*)malloc(sizeof(Grid));
-        (*output_grid)->height=(*grid1)->height;
-        (*output_grid)->width=(*grid2)->width;
+        Grid *output_grid=(Grid*)malloc(sizeof(Grid));
+        output_grid->height=(*grid1)->height;
+        output_grid->width=(*grid2)->width;
 
-        (*output_grid)->grid=(double**)malloc((*output_grid)->height*sizeof(double*));
+        output_grid->grid=(double**)malloc(output_grid->height*sizeof(double*));
 
 
         int index_height, index_width;
 
-        for(index_height=0;index_height<(*output_grid)->height;index_height++){
+
+        for(index_height=0;index_height<output_grid->height;index_height++){
 
 
-            double* row=(double*)malloc((*output_grid)->height*sizeof(double));
+            double* row=(double*)malloc(output_grid->width*sizeof(double));
 
-            for(index_width=0;index_width<(*output_grid)->width;index_width++){
-
+            for(index_width=0;index_width<output_grid->width;index_width++){
 
                 int index_forgotten;
                 double sum_forgotten=0.0;
@@ -2543,10 +2545,15 @@ void grid_dot_mutiplication(Grid** output_grid, Grid** grid1, Grid** grid2){
                 }
                 *(row+index_width)=sum_forgotten;
 
+                //printf("\n %d height : \n",index_height);
+                //printf("\n %d width : \n",index_width);
             }
-            *((*output_grid)->grid+index_height)=row;
+            *(output_grid->grid+index_height)=row;
 
             }
+
+            *o_g=output_grid;
+
         }
 
 }
@@ -2884,32 +2891,32 @@ void calculate_deltas_fc(Model** model, LAYER** layer){
 
                         (*layer)->deltas->grid=deltas_output;
 
+                        //write("--------------------------");
+
+                        //write("Deltas+1");
+                        //shape_grid((*layer)->next_layer->deltas->grid);
+                        Grid* deltas_plus_one=(*layer)->next_layer->deltas->grid;
+                        //write("A_I");
+                        //shape_grid(transpose((*layer)->output_data->fc->After_Activation));
+
+                        Grid* A_i=transpose((*layer)->output_data->fc->After_Activation);
+
+                        //write("Weights ..");
+
+                        //shape_grid((*layer)->next_layer->kernels->grid);
+                        //write("--------------------------");
+
+                        Grid* W_i=(*layer)->next_layer->kernels->grid;
+
+                        Grid* partial_derivative;
+
+                        grid_dot_mutiplication(&partial_derivative,&deltas_plus_one,&A_i);
+                        multiply_by_digit(&partial_derivative,(*model)->learning_rate);
+                        W_i=Operate(W_i,partial_derivative,"-");
+
                     }
-
-
-                    /*
-                    write("--------------------------");
-                    write("Deltas+1");
-                    shape_grid((*layer)->next_layer->deltas->grid);
-
-                    write("A_I");
-                    shape_grid(transpose((*layer)->output_data->fc->After_Activation));
-
-                    write("matching this layer..");
-
-                    shape_grid((*layer)->kernels->grid);
-
-                    write("or next layer ..");
-
-                    shape_grid((*layer)->next_layer->kernels->grid);
-                    write("--------------------------");
-                    */
-
                     //Next thing .. we will update the next layer for sure :)))
-
-
-            }
-
+                }
         }
 }
 
@@ -3441,12 +3448,12 @@ void model_code(){
     //declaring the input | output
     Block* X;
 
-    create_Block(&X,4,150,150,"random","float");
+    create_Block(&X,4,80,80,"random","float");
 
     Grid* Y=fill_index(12,2);
     //create_Grid(&Y,5,5,"random","int");
 
-    create_Model(&model,X,Y);
+    create_Model(&model,X,Y,.2);
 
 
     add_CONV(&model,4,1,2,5,&relu);
@@ -3455,7 +3462,7 @@ void model_code(){
     add_POOL(&model,1,1,3,"max");
     add_CONV(&model,10,2,2,5,&relu);
     add_POOL(&model,2,2,3,"max");
-    add_CONV(&model,5,1,1,5,&relu);
+    add_CONV(&model,5,2,2,5,&relu);
     add_POOL(&model,1,1,3,"max");
     //display_Block((model)->final_layer->cash->block);
 
@@ -3494,6 +3501,8 @@ void model_code(){
     calculate_deltas_conv(&model,&(l_p_1->previous_layer->previous_layer->previous_layer));
     calculate_deltas_pool(&model,&(l_p_1->previous_layer->previous_layer->previous_layer->previous_layer));
     calculate_deltas_conv(&model,&(l_p_1->previous_layer->previous_layer->previous_layer->previous_layer->previous_layer));
+
+
 
 }
 
