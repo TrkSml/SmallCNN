@@ -2838,7 +2838,6 @@ void display_Grid(Grid *table){
 
 void calculate_deltas_fc(Model** model, LAYER** layer){
 
-    write(getType((*layer)->name));
     if((*layer)->name!=FULLY_CONNECTED_AFTER_FLATTEN &&\
             (*layer)->name!=FULLY_CONNECTED &&\
             (*layer)->name!=ACTIVATION__ &&\
@@ -2853,11 +2852,10 @@ void calculate_deltas_fc(Model** model, LAYER** layer){
     else
         {
 
-            if((*layer)==(*model)->final_layer){
+            if((*layer)==(*model)->final_layer || (*layer)->name==ACTIVATION__){
 
                 Grid* final_delta=Operate((*layer)->output_data->grid,(*model)->Y,"-");
                 (*layer)->deltas->grid=final_delta;
-
 
             }
 
@@ -3462,6 +3460,8 @@ void calculate_deltas_conv(Model** model, LAYER** layer){
 
     }
 
+    (*layer)->kernels->blocks=weights;
+
     write("----------------------------------");
 
 
@@ -3627,6 +3627,51 @@ void summary_layers(Model** model,char* choice){
 
 }
 
+
+LAYER* extract_layer_from_depth(Model* model, int8_t depth){
+
+    LAYER* current=model->final_layer;
+    uint8_t counter=model->nbr_levels;
+
+
+    while(counter>depth){
+
+        current=current->previous_layer;
+        counter--;
+
+    }
+
+    return current;
+
+}
+
+void backpropagation(Model** model){
+
+    LAYER* current=(*model)->final_layer;
+
+    while(current){
+
+        if(current->name==POOL){
+
+            calculate_deltas_pool(model,&current);
+            current=current->previous_layer;
+        }
+        else
+        if(current->name==CONV){
+
+            calculate_deltas_conv(model,&current);
+            current=current->previous_layer;
+        }
+        else{
+
+        calculate_deltas_fc(model,&current);
+        current=current->previous_layer;
+
+        }
+    }
+
+}
+
 void model_code(){
 
 
@@ -3636,7 +3681,7 @@ void model_code(){
 
     create_Block(&X,3,80,80,"random","float");
 
-    Grid* Y=fill_index(12,2);
+    Grid* Y=fill_index(12,6);
 
     create_Model(&model,X,Y,.2);
 
@@ -3659,33 +3704,11 @@ void model_code(){
     add_FC(&model,&sigmoid,12);
     DENSE(&model);
 
-    //summary_layers(&model,"forward");
+    summary_layers(&model,"forward");
 
+    backpropagation(&model);
 
-    LAYER* l_1=model->final_layer->previous_layer;
-    LAYER* l=model->final_layer;
-    LAYER* l_p=l_1->previous_layer->previous_layer->previous_layer->previous_layer->previous_layer;
-
-    LAYER* l_p_1=l_p->previous_layer->previous_layer->previous_layer->previous_layer;
-
-    calculate_deltas_fc(&model,&l);
-    calculate_deltas_fc(&model,&l_1);
-    calculate_deltas_fc(&model,&(l_1->previous_layer));
-    calculate_deltas_fc(&model,&(l_1->previous_layer->previous_layer));
-    calculate_deltas_fc(&model,&(l_1->previous_layer->previous_layer->previous_layer));
-    calculate_deltas_fc(&model,&(l_1->previous_layer->previous_layer->previous_layer->previous_layer));
-    calculate_deltas_fc(&model,&(l_1->previous_layer->previous_layer->previous_layer->previous_layer->previous_layer));
-    calculate_deltas_fc(&model,&(l_p->previous_layer));
-    calculate_deltas_pool(&model,&(l_p->previous_layer->previous_layer));
-    calculate_deltas_conv(&model,&(l_p->previous_layer->previous_layer->previous_layer));
-    calculate_deltas_pool(&model,&(l_p->previous_layer->previous_layer->previous_layer->previous_layer));
-    calculate_deltas_conv(&model,&(l_p_1->previous_layer));
-    calculate_deltas_pool(&model,&(l_p_1->previous_layer->previous_layer));
-    calculate_deltas_conv(&model,&(l_p_1->previous_layer->previous_layer->previous_layer));
-    calculate_deltas_pool(&model,&(l_p_1->previous_layer->previous_layer->previous_layer->previous_layer));
-    calculate_deltas_conv(&model,&(l_p_1->previous_layer->previous_layer->previous_layer->previous_layer->previous_layer));
-
-
+    display_Grid(model->final_layer->output_data->grid);
 
 }
 
@@ -3694,7 +3717,11 @@ int main()
 {
 
     //Debugging the code
-    model_code();
+    int i;
+    int loops=20;
+    for(i=0;i<loops;i++){
+        model_code();
+    }
 
     printf("\nDONE :))) ! \n\n");
 
