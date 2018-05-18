@@ -467,11 +467,13 @@ void Flatten(Block **output,
 void Fully_Connected_After_Flatten(FullyConnected** fc,
                                    Block** input,
                                    double (*activation)(double),
-                                    int output_layer_size);
+                                   Grid** weights,
+                                   int output_layer_size);
 
 void Fully_Connected(FullyConnected** fc,
                      FullyConnected** fc_input,
                      double (*activation)(double),
+                     Grid** weights,
                      int output_layer_size);
 
 void Softmax_Activation(Grid** fc_output ,
@@ -581,21 +583,30 @@ LAYER* conv_layer(paramsCONV prmconvs, Block* input){
     initialize_layer_content_Block(&layer,&input);
 
     Block* output;
-    Blocks* kernels;
     Blocks* deltas;
+
     CONV_CASH* conv_cash;
 
-    create_Blocks(&kernels,prmconvs.nbr_filters, input->depth,prmconvs.kernel_size,prmconvs.kernel_size,"random","float");
+    layer->kernels->blocks=NULL;
+
+    if(layer->kernels->blocks==NULL)
+
+    create_Blocks(&layer->kernels->blocks,
+                  prmconvs.nbr_filters,
+                  input->depth,
+                  prmconvs.kernel_size,
+                  prmconvs.kernel_size,
+                  "random","float");
+
     create_Blocks(&deltas,prmconvs.nbr_filters, input->depth,prmconvs.kernel_size,prmconvs.kernel_size,"zeros","float");
 
-    layer->kernels->blocks=kernels;
     layer->delta->blocks=deltas;
     layer->input_data->block=input;
 
     Convolution(&output,
                 &input,
                 &conv_cash,
-                kernels,
+                layer->kernels->blocks,
                 prmconvs.stride,
                 prmconvs.padding);
 
@@ -699,20 +710,28 @@ LAYER* fcaf_layer(paramsFCAF prmfcaf, Block* input){
 
     initialize_layer_content_Block(&layer,&input);
 
-    FullyConnected* output=initialize_Fully_Connected(1);;
+    FullyConnected* output=initialize_Fully_Connected(1);
 
+    layer->kernels->grid=NULL;
     layer->input_data->block=input;
+
     Fully_Connected_After_Flatten(&output,
                                   &input,
                                   prmfcaf.activation__,
+                                  &layer->kernels->grid,
                                   prmfcaf.output_size);
 
     Grid* deltas;
-    create_Grid(&deltas,output->weights->height,output->weights->width,"zeros","float");
+
+    create_Grid(&deltas,
+                output->weights->height,
+                output->weights->width,
+                "zeros",
+                "float");
 
     layer->activation__=prmfcaf.activation__;
     layer->deltas->grid=deltas;
-    layer->kernels->grid=output->weights;
+
     layer->output_data->fc=output;
     layer->name=prmfcaf.name;
 
@@ -727,20 +746,28 @@ LAYER* fc_layer(paramsFC prmffc, FullyConnected* input){
 
     initialize_layer_content_fc(&layer,&input);
 
+    //
+    layer->kernels->grid=NULL;
 
     FullyConnected* output=initialize_Fully_Connected(1);;
     Fully_Connected(&output,
                     &input,
                     prmffc.activation__,
+                    &layer->kernels->grid,
                     prmffc.output_size);
 
     Grid* deltas;
-    create_Grid(&deltas,output->weights->height,output->weights->width,"zeros","float");
+    create_Grid(&deltas,
+                output->weights->height,
+                output->weights->width,
+                "zeros",
+                "float");
+
     layer->deltas->grid=deltas;
 
     layer->input_data->fc=input;
     layer->activation__=prmffc.activation__;
-    layer->kernels->grid=output->weights;
+
     layer->output_data->fc=output;
     layer->name=prmffc.name;
 
@@ -2577,18 +2604,21 @@ void grid_dot_mutiplication(Grid** o_g, Grid** grid1, Grid** grid2){
 }
 
 
-void Fully_Connected_After_Flatten(FullyConnected** fc, Block** input, double (*activation)(double), int output_layer_size){
+void Fully_Connected_After_Flatten(FullyConnected** fc,
+                                   Block** input,
+                                   double (*activation)(double),
+                                   Grid** weights_tmp,
+                                   int output_layer_size){
 
     current_Layer("Fully Connected");
 
     uint32_t input_layer_size=(*input)->depth;
 
-    Grid* weights_tmp;
     Grid* Z_i;
     Grid* A_i;
     Grid* input_grid;
 
-    if(!test_if_fully_connected_is_null(*fc)){
+    //if(!test_if_fully_connected_is_null(*fc)){
 
         if(!test_block_for_fully_connected(*input)){
 
@@ -2606,13 +2636,10 @@ void Fully_Connected_After_Flatten(FullyConnected** fc, Block** input, double (*
             local_fc->bias=(Grid*)malloc(sizeof(Grid*));
             create_Grid(&local_fc->bias,output_layer_size,1,"zeros","float");
 
-            Grid* weights_tmp;
-            create_Grid(&weights_tmp,output_layer_size,input_layer_size,"random","float");
+            if(*weights_tmp==NULL)create_Grid(weights_tmp,output_layer_size,input_layer_size,"random","float");
 
-            local_fc->weights=weights_tmp;
+            local_fc->weights=*weights_tmp;
             local_fc->activation=*activation;
-
-
 
             extract_Grid_From_Flatten_Block(input,&input_grid);
             Grid* transposed_input_grid=transpose(input_grid);
@@ -2634,8 +2661,9 @@ void Fully_Connected_After_Flatten(FullyConnected** fc, Block** input, double (*
 
 
             }
-        }
+    //    }
 
+    /*
     else{
 
             FullyConnected* local_fc=*fc;
@@ -2660,19 +2688,23 @@ void Fully_Connected_After_Flatten(FullyConnected** fc, Block** input, double (*
             shape_grid(local_fc->After_Activation);
 
     }
+    */
 }
 
 
-void Fully_Connected(FullyConnected** fc, FullyConnected** fc_input,double (*activation)(double), int output_layer_size){
+void Fully_Connected(FullyConnected** fc,
+                     FullyConnected** fc_input,
+                     double (*activation)(double),
+                     Grid** weights_tmp,
+                     int output_layer_size){
 
     current_Layer("Fully Connected");
 
     uint32_t input_layer_size=(*fc_input)->current_size;
-    Grid* weights_tmp;
     Grid* Z_i;
     Grid* A_i;
 
-    if(!test_if_fully_connected_is_null(*fc)){
+    //if(!test_if_fully_connected_is_null(*fc)){
 
         //test if a FullyConnected block is null
         if(!test_if_fully_connected_is_null(*fc_input)){
@@ -2691,10 +2723,9 @@ void Fully_Connected(FullyConnected** fc, FullyConnected** fc_input,double (*act
             local_fc->bias=(Grid*)malloc(sizeof(Grid*));
             create_Grid(&local_fc->bias,output_layer_size,1,"zeros","float");
 
+            if(*weights_tmp==NULL)create_Grid(weights_tmp,output_layer_size,input_layer_size,"random","float");
 
-            create_Grid(&weights_tmp,output_layer_size,input_layer_size,"random","float");
-
-            local_fc->weights=weights_tmp;
+            local_fc->weights=*weights_tmp;
             local_fc->activation=*activation;
 
             grid_dot_mutiplication(&Z_i,&local_fc->weights,&(*fc_input)->After_Activation);
@@ -2715,7 +2746,8 @@ void Fully_Connected(FullyConnected** fc, FullyConnected** fc_input,double (*act
 
         }
 
-    }
+    //  }
+    /*
     else{
 
             FullyConnected* local_fc=*fc;
@@ -2736,6 +2768,7 @@ void Fully_Connected(FullyConnected** fc, FullyConnected** fc_input,double (*act
             shape_grid(local_fc->After_Activation);
 
     }
+    */
 }
 
 
