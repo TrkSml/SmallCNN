@@ -51,6 +51,14 @@ typedef enum{
 }TYPE_LAYER;
 
 
+typedef enum{
+
+    trainable,
+    not_trainable
+
+}WITH_WEIGHTS;
+
+
 char* getType(TYPE_LAYER name){
 
         if(name==CONV)
@@ -128,7 +136,6 @@ typedef struct params_FLATTEN paramsFLATTEN;
 typedef struct params_FCAF paramsFCAF;
 typedef struct params_FC paramsFC;
 
-
 //2D output
 //After single convolution
 typedef struct {
@@ -170,7 +177,6 @@ typedef struct{
     double (*activation)(double);
 
 }FullyConnected;
-
 
 
 //In case we are dealing with a convolution / pooling
@@ -289,6 +295,7 @@ typedef struct{
 
 }POOL_CASH;
 
+
 typedef struct{
 
     uint16_t stride;
@@ -296,6 +303,24 @@ typedef struct{
     uint16_t kernel;
 
 }CONV_CASH;
+
+
+typedef struct{
+
+    TYPE_LAYER name;
+    Kernels* weights;
+    uint8_t level;
+
+}entity_weight_stack__;
+
+
+typedef struct weight_stack__{
+
+    entity_weight_stack__* entity_stack;
+    struct weight_stack__* next_stack;
+
+}weight_stack;
+
 
 typedef struct LAYER_{
 
@@ -308,6 +333,7 @@ typedef struct LAYER_{
     Kernels* deltas;
     Kernels* delta;
     Kernels* cash;
+
     POOL_CUMUL_OUTPUT* cash_for_pooling;
     CONV_CASH* cash_for_conv;
 
@@ -315,6 +341,8 @@ typedef struct LAYER_{
 
     struct LAYER_* next_layer;
     struct LAYER_* previous_layer;
+
+    WITH_WEIGHTS trainable_detail;
 
 }LAYER;
 
@@ -325,12 +353,85 @@ typedef struct {
     Block* X;
     Grid* Y;
 
+    weight_stack* weightStack;
     LAYER* first_layer;
     LAYER* final_layer;
     uint32_t nbr_levels;
+    uint32_t actual_epoch;
+    uint32_t epochs;
     double learning_rate;
 
+    //establishing a stack of weights
+    // pooling
+    // conv
+    // fully connected
+
 }Model;
+
+
+weight_stack* initialize_weight_stack(size_t size_allocation){
+
+    return malloc(sizeof(weight_stack));
+
+}
+
+
+void fill_weight_stack(weight_stack** w_s, TYPE_LAYER name, Kernels* weights, uint8_t level){
+
+    //LAYER* pointer_to_layer=*layer;
+
+    entity_weight_stack__* e_w_s=(entity_weight_stack__*)malloc(sizeof(entity_weight_stack__));
+    e_w_s->name=name;
+
+    if(name==CONV)
+        e_w_s->weights=weights->blocks;
+
+    if(name==FULLY_CONNECTED || name==FULLY_CONNECTED_AFTER_FLATTEN)
+        e_w_s->weights=weights->grid;
+
+    e_w_s->level=level;
+
+    if(*w_s==NULL){
+
+        *w_s=(weight_stack*)malloc(sizeof(weight_stack));
+        (*w_s)->entity_stack=e_w_s;
+        (*w_s)->next_stack=NULL;
+
+
+    }else
+
+    {
+
+        weight_stack* pointer_to_stack=*w_s;
+        while(pointer_to_stack->next_stack)
+            pointer_to_stack=pointer_to_stack->next_stack;
+
+        pointer_to_stack->next_stack=initialize_weight_stack(1);
+        pointer_to_stack=pointer_to_stack->next_stack;
+        pointer_to_stack->entity_stack=e_w_s;
+        pointer_to_stack->next_stack=NULL;
+
+    }
+
+
+}
+
+
+entity_weight_stack__*
+    search_layer_from_level(weight_stack* w_s, uint8_t level){
+
+    weight_stack* pointer_to_stack=w_s;
+    //uint8_t counter=1;
+
+    while(pointer_to_stack->entity_stack->level!=level)
+        pointer_to_stack=pointer_to_stack->next_stack;
+
+    if(!pointer_to_stack)
+        write("could not find the appropriate layer among the stack of weights ..");
+
+    return pointer_to_stack->entity_stack;
+
+}
 
 
 pair getMinMax(Grid* grid, uint32_t low, uint32_t high)
@@ -576,7 +677,7 @@ void initialize_layer_content_Block(LAYER** layer, Block** input){
 
 }
 
-LAYER* conv_layer(paramsCONV prmconvs, Block* input){
+LAYER* conv_layer(paramsCONV prmconvs, Block* input, Blocks* weights){
 
     LAYER* layer;
 
@@ -587,18 +688,15 @@ LAYER* conv_layer(paramsCONV prmconvs, Block* input){
 
     CONV_CASH* conv_cash;
 
-    layer->kernels->blocks=NULL;
+    layer->kernels->blocks=weights;
 
-    if(layer->kernels->blocks==NULL)
 
-    create_Blocks(&layer->kernels->blocks,
-                  prmconvs.nbr_filters,
+    create_Blocks(&deltas,prmconvs.nbr_filters,
                   input->depth,
                   prmconvs.kernel_size,
                   prmconvs.kernel_size,
-                  "random","float");
-
-    create_Blocks(&deltas,prmconvs.nbr_filters, input->depth,prmconvs.kernel_size,prmconvs.kernel_size,"zeros","float");
+                  "zeros",
+                  "float");
 
     layer->delta->blocks=deltas;
     layer->input_data->block=input;
@@ -621,6 +719,7 @@ LAYER* conv_layer(paramsCONV prmconvs, Block* input){
     layer->output_data->block=output;
     layer->activation__=prmconvs.activation__;
     layer->name=prmconvs.name;
+    layer->trainable_detail=trainable;
 
     return layer;
 
@@ -642,6 +741,7 @@ LAYER* Dense(FullyConnected* input){
 
     layer->output_data->grid=fc_output;
     layer->name=ACTIVATION__;
+    layer->trainable_detail=not_trainable;
 
     return layer;
 
@@ -679,6 +779,7 @@ LAYER* pool_layer(paramsPOOL prmpool, Block* input){
     layer->cash->block=cash;
     layer->output_data->block=output;
     layer->name=prmpool.name;
+    layer->trainable_detail=trainable;
 
     return layer;
 
@@ -698,6 +799,7 @@ LAYER* flatten_layer(paramsFLATTEN prmft, Block* input){
     layer->input_data->block=input;
     layer->output_data->block=output;
     layer->name=prmft.name;
+    layer->trainable_detail=trainable;
 
     return layer;
 
@@ -734,6 +836,7 @@ LAYER* fcaf_layer(paramsFCAF prmfcaf, Block* input){
 
     layer->output_data->fc=output;
     layer->name=prmfcaf.name;
+    layer->trainable_detail=trainable;
 
     return layer;
 
@@ -749,7 +852,7 @@ LAYER* fc_layer(paramsFC prmffc, FullyConnected* input){
     //
     layer->kernels->grid=NULL;
 
-    FullyConnected* output=initialize_Fully_Connected(1);;
+    FullyConnected* output=initialize_Fully_Connected(1);
     Fully_Connected(&output,
                     &input,
                     prmffc.activation__,
@@ -770,6 +873,7 @@ LAYER* fc_layer(paramsFC prmffc, FullyConnected* input){
 
     layer->output_data->fc=output;
     layer->name=prmffc.name;
+    layer->trainable_detail=trainable;
 
 
     return layer;
@@ -777,16 +881,17 @@ LAYER* fc_layer(paramsFC prmffc, FullyConnected* input){
     }
 
 
-
-void create_Model(Model** model, Block* X, Grid *Y, double learning_rate){
+void create_Model(Model** model, Block* X, Grid *Y, double learning_rate, uint32_t number_of_epochs){
 
     *model=initialize_Model();
     (*model)->first_layer=NULL;
     (*model)->final_layer=NULL;
     (*model)->X=X;
     (*model)->Y=Y;
-    (*model)->nbr_levels=0;
+    (*model)->nbr_levels++;
     (*model)->learning_rate=learning_rate;
+    (*model)->weightStack=initialize_weight_stack(1);
+    (*model)->epochs=number_of_epochs;
 
 }
 
@@ -843,7 +948,8 @@ void update_model(Model** model, LAYER** layer){
 }
 
 
-void add_CONV(Model** model, uint32_t nbr_filters,
+void add_CONV(Model** model,
+                             uint32_t nbr_filters,
                              uint32_t stride,
                              uint32_t padding,
                              uint32_t kernel_size,
@@ -858,23 +964,60 @@ void add_CONV(Model** model, uint32_t nbr_filters,
                             activation__:activation,
                             };
 
+    Kernels* weights=(Kernels*)malloc(sizeof(Kernels*));
+
     LAYER* conv_l=initialize_LAYER(1);
 
-    (*model)->nbr_levels++;
+    if((*model)->actual_epoch==0){
+
+        uint32_t depth;
+
+        if(!(*model)->final_layer)
+            depth=(*model)->X->depth;
+        else
+            depth=(*model)->final_layer->output_data->block->depth;
+
+        create_Blocks(&(weights->blocks),
+                  params_conv.nbr_filters,
+                  depth,
+                  params_conv.kernel_size,
+                  params_conv.kernel_size,
+                  "random","float");
+
+        write("begin");
+        fill_weight_stack(&(*model)->weightStack,
+                           CONV,
+                           weights->blocks,
+                           (*model)->nbr_levels);
+        write("end");
+
+    }
+
+    else {
+
+        entity_weight_stack__* e_w_s=search_layer_from_level((*model)->weightStack,
+                                                             (*model)->nbr_levels);
+
+        weights=e_w_s->weights->blocks;
+
+    }
+
+
 
     if(!(*model)->final_layer){
-        conv_l=conv_layer(params_conv,(*model)->X);
+        conv_l=conv_layer(params_conv,(*model)->X,weights->blocks);
 
     }
     else{
 
-        conv_l=conv_layer(params_conv,(*model)->final_layer->output_data->block);
+        conv_l=conv_layer(params_conv,(*model)->final_layer->output_data->block,weights->blocks);
 
     }
 
     update_model(model,&conv_l);
 
     shape_block((*model)->final_layer->output_data->block);
+    (*model)->nbr_levels++;
 
 }
 
@@ -958,6 +1101,7 @@ void add_FCAF(Model** model,double (*activation)(double),
     shape_grid((*model)->final_layer->output_data->grid);
 
 }
+
 
 void add_FC(Model** model,double (*activation)(double),
                             uint32_t output_size){
@@ -3661,23 +3805,6 @@ void summary_layers(Model** model,char* choice){
 }
 
 
-LAYER* extract_layer_from_depth(Model* model, int8_t depth){
-
-    LAYER* current=model->final_layer;
-    uint8_t counter=model->nbr_levels;
-
-
-    while(counter>depth){
-
-        current=current->previous_layer;
-        counter--;
-
-    }
-
-    return current;
-
-}
-
 void backpropagation(Model** model){
 
     LAYER* current=(*model)->final_layer;
@@ -3716,8 +3843,7 @@ void model_code(){
 
     Grid* Y=fill_index(12,6);
 
-    create_Model(&model,X,Y,.2);
-
+    create_Model(&model,X,Y,.2,20);
 
     add_CONV(&model,3,1,0,5,&relu);
     add_POOL(&model,2,2,3,"max");
@@ -3743,6 +3869,7 @@ void model_code(){
 
     display_Grid(model->final_layer->output_data->grid);
 
+
 }
 
 
@@ -3750,11 +3877,8 @@ int main()
 {
 
     //Debugging the code
-    int i;
-    int loops=20;
-    for(i=0;i<loops;i++){
-        model_code();
-    }
+    model_code();
+
 
     printf("\nDONE :))) ! \n\n");
 
