@@ -4,7 +4,7 @@ A minimalist engine for Deep and Shallow convolutional neural networks tried on 
 
 A snippet of a single training loop :
 
-``
+
 
     create_Model(&model, // the model
                  &weightStack,  // the weight stack
@@ -42,4 +42,4 @@ A snippet of a single training loop :
     add_FC(&model,&sigmoid,12);
     DENSE(&model);
     
-``
+
