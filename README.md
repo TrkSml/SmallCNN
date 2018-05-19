@@ -1,6 +1,6 @@
 # SmallCNN
 
-A minimalist engine for Deep and Shallow convolutional neural networks tried on a single random image / signe target. It allows to build layer-based convolutional models.
+A minimalist engine for Deep and Shallow convolutional neural networks tried on a single random image / single target. It allows to build layer-based convolutional models.
 
 A snippet of a single training loop :
 
