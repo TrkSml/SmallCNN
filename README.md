@@ -43,3 +43,19 @@ A snippet of a single training loop :
     DENSE(&model);
     
 
+The output gives us :
+
+    0.0724516941 |
+    0.0729785921 |
+    0.0733436155 |
+    0.0735888876 |
+    0.0723060742 |
+    0.0730557267 |
+    0.0725731002 |
+    0.0757391846 |
+    0.0740432893 |
+    0.0732622896 |
+    0.0739101402 |
+    0.1927474058 |
+    
+which corresponds to the 12th class as stated in the main code.
