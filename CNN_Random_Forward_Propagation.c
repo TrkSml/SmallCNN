@@ -344,6 +344,8 @@ typedef struct LAYER_{
 
     WITH_WEIGHTS trainable_detail;
 
+    uint8_t layer_number;
+
 }LAYER;
 
 
@@ -382,12 +384,13 @@ void fill_weight_stack(weight_stack** w_s, TYPE_LAYER name, Kernels* weights, ui
 
     entity_weight_stack__* e_w_s=(entity_weight_stack__*)malloc(sizeof(entity_weight_stack__));
     e_w_s->name=name;
+    e_w_s->weights=(Kernels*)malloc(sizeof(Kernels));
 
     if(name==CONV)
-        e_w_s->weights=weights->blocks;
+        e_w_s->weights->blocks=weights->blocks;
 
     if(name==FULLY_CONNECTED || name==FULLY_CONNECTED_AFTER_FLATTEN)
-        e_w_s->weights=weights->grid;
+        e_w_s->weights->grid=weights->grid;
 
     e_w_s->level=level;
 
@@ -806,7 +809,7 @@ LAYER* flatten_layer(paramsFLATTEN prmft, Block* input){
     }
 
 
-LAYER* fcaf_layer(paramsFCAF prmfcaf, Block* input){
+LAYER* fcaf_layer(paramsFCAF prmfcaf, Block* input, Grid* weights){
 
     LAYER* layer;
 
@@ -814,7 +817,7 @@ LAYER* fcaf_layer(paramsFCAF prmfcaf, Block* input){
 
     FullyConnected* output=initialize_Fully_Connected(1);
 
-    layer->kernels->grid=NULL;
+    layer->kernels->grid=weights;
     layer->input_data->block=input;
 
     Fully_Connected_After_Flatten(&output,
@@ -843,14 +846,14 @@ LAYER* fcaf_layer(paramsFCAF prmfcaf, Block* input){
     }
 
 
-LAYER* fc_layer(paramsFC prmffc, FullyConnected* input){
+LAYER* fc_layer(paramsFC prmffc, FullyConnected* input, Grid* weights){
 
     LAYER* layer;
 
     initialize_layer_content_fc(&layer,&input);
 
     //
-    layer->kernels->grid=NULL;
+    layer->kernels->grid=weights;
 
     FullyConnected* output=initialize_Fully_Connected(1);
     Fully_Connected(&output,
@@ -984,12 +987,10 @@ void add_CONV(Model** model,
                   params_conv.kernel_size,
                   "random","float");
 
-        write("begin");
         fill_weight_stack(&(*model)->weightStack,
                            CONV,
-                           weights->blocks,
+                           weights,
                            (*model)->nbr_levels);
-        write("end");
 
     }
 
@@ -998,7 +999,7 @@ void add_CONV(Model** model,
         entity_weight_stack__* e_w_s=search_layer_from_level((*model)->weightStack,
                                                              (*model)->nbr_levels);
 
-        weights=e_w_s->weights->blocks;
+        weights->blocks=e_w_s->weights->blocks;
 
     }
 
@@ -1083,12 +1084,44 @@ void add_FCAF(Model** model,double (*activation)(double),
                             output_size:output_size};
 
 
+
+
+    Kernels* weights=(Kernels*)malloc(sizeof(Kernels*));
+
+    if((*model)->actual_epoch==0){
+
+        uint32_t depth;
+
+        depth=(*model)->final_layer->output_data->block->depth;
+
+        create_Grid(&(weights->grid),params_fcaf.output_size,depth,"random","float");
+
+        fill_weight_stack(&(*model)->weightStack,
+                           FULLY_CONNECTED_AFTER_FLATTEN,
+                           weights,
+                           (*model)->nbr_levels);
+
+    }
+
+    else {
+
+        entity_weight_stack__* e_w_s=search_layer_from_level((*model)->weightStack,
+                                                             (*model)->nbr_levels);
+
+        weights->grid=e_w_s->weights->grid;
+
+    }
+
+
+
     LAYER* fcaf_l=initialize_LAYER(1);
-    (*model)->nbr_levels++;
 
     if((*model)->final_layer){
 
-        fcaf_l=fcaf_layer(params_fcaf,(*model)->final_layer->output_data->block);
+        fcaf_l=fcaf_layer(params_fcaf,
+                          (*model)->final_layer->output_data->block,
+                          weights->grid);
+
     }
     else{
 
@@ -1098,6 +1131,7 @@ void add_FCAF(Model** model,double (*activation)(double),
     }
 
     update_model(model,&fcaf_l);
+    (*model)->nbr_levels++;
     shape_grid((*model)->final_layer->output_data->grid);
 
 }
@@ -1111,12 +1145,41 @@ void add_FC(Model** model,double (*activation)(double),
                             output_size:output_size};
 
 
+    Kernels* weights=(Kernels*)malloc(sizeof(Kernels*));
+
+    if((*model)->actual_epoch==0){
+
+        uint32_t input_size=(*model)->final_layer->output_data->fc->current_size;
+
+        create_Grid(&(weights->grid),
+                    params_fc.output_size,
+                    input_size,
+                    "random",
+                    "float");
+
+        fill_weight_stack(&(*model)->weightStack,
+                           FULLY_CONNECTED,
+                           weights,
+                           (*model)->nbr_levels);
+
+    }
+
+    else {
+
+        entity_weight_stack__* e_w_s=search_layer_from_level((*model)->weightStack,
+                                                             (*model)->nbr_levels);
+
+        weights->grid=e_w_s->weights->grid;
+
+    }
+
     LAYER* fcaf_l=initialize_LAYER(1);
-    (*model)->nbr_levels++;
 
     if((*model)->final_layer){
 
-        fcaf_l=fc_layer(params_fc,(*model)->final_layer->output_data->fc);
+        fcaf_l=fc_layer(params_fc,
+                        (*model)->final_layer->output_data->fc,
+                        weights->grid);
     }
     else{
 
@@ -1126,6 +1189,7 @@ void add_FC(Model** model,double (*activation)(double),
     }
 
     update_model(model,&fcaf_l);
+    (*model)->nbr_levels++;
     shape_grid((*model)->final_layer->output_data->fc->After_Activation);
 
 }
@@ -2183,14 +2247,16 @@ void create_cumulating_for_pooling(Cumulator** cumulator,
                                                   ){
 
 
+    Cumulator_for_pooling* cfp=(Cumulator_for_pooling*)malloc(sizeof(Cumulator_for_pooling));
+
+    cfp->index_height_before_pooling=ind_h_bf_pool;
+    cfp->index_width_before_pooling=ind_w_bf_pool;
+    cfp->counter=1;
+
     if(*cumulator==NULL){
 
         *cumulator=(Cumulator*)malloc(sizeof(Cumulator));
-        Cumulator_for_pooling* cfp=(Cumulator_for_pooling*)malloc(sizeof(Cumulator_for_pooling));
 
-        cfp->index_height_before_pooling=ind_h_bf_pool;
-        cfp->index_width_before_pooling=ind_w_bf_pool;
-        cfp->counter=1;
 
         (*cumulator)->cumulator=cfp;
         (*cumulator)->next_cumulator=NULL;
@@ -2230,12 +2296,6 @@ void create_cumulating_for_pooling(Cumulator** cumulator,
         }
 
         if(!current && !change){
-
-            Cumulator_for_pooling* cfp=(Cumulator_for_pooling*)malloc(sizeof(Cumulator_for_pooling));
-
-            cfp->index_height_before_pooling=ind_h_bf_pool;
-            cfp->index_width_before_pooling=ind_w_bf_pool;
-            cfp->counter=1;
 
             previous_cumulatr->next_cumulator->cumulator=cfp;
             previous_cumulatr->next_cumulator->next_cumulator=NULL;
@@ -2780,8 +2840,6 @@ void Fully_Connected_After_Flatten(FullyConnected** fc,
             local_fc->bias=(Grid*)malloc(sizeof(Grid*));
             create_Grid(&local_fc->bias,output_layer_size,1,"zeros","float");
 
-            if(*weights_tmp==NULL)create_Grid(weights_tmp,output_layer_size,input_layer_size,"random","float");
-
             local_fc->weights=*weights_tmp;
             local_fc->activation=*activation;
 
@@ -2866,8 +2924,6 @@ void Fully_Connected(FullyConnected** fc,
 
             local_fc->bias=(Grid*)malloc(sizeof(Grid*));
             create_Grid(&local_fc->bias,output_layer_size,1,"zeros","float");
-
-            if(*weights_tmp==NULL)create_Grid(weights_tmp,output_layer_size,input_layer_size,"random","float");
 
             local_fc->weights=*weights_tmp;
             local_fc->activation=*activation;
@@ -3868,7 +3924,6 @@ void model_code(){
     backpropagation(&model);
 
     display_Grid(model->final_layer->output_data->grid);
-
 
 }
 
