@@ -363,10 +363,6 @@ typedef struct {
     uint32_t epochs;
     double learning_rate;
 
-    //establishing a stack of weights
-    // pooling
-    // conv
-    // fully connected
 
 }Model;
 
@@ -416,7 +412,6 @@ void fill_weight_stack(weight_stack** w_s, TYPE_LAYER name, Kernels* weights, ui
 
     }
 
-
 }
 
 
@@ -433,6 +428,31 @@ entity_weight_stack__*
         write("could not find the appropriate layer among the stack of weights ..");
 
     return pointer_to_stack->entity_stack;
+
+}
+
+
+void update_weights_layer__(weight_stack** w_s,
+                            uint8_t level,
+                            Kernels* weights,
+                            TYPE_LAYER name
+                            ){
+
+
+    entity_weight_stack__* pointer_to_entity_stack=search_layer_from_level(*w_s,
+                                                                    level);
+
+    write("updating weights.. ");
+
+
+    if(name==CONV)
+        pointer_to_entity_stack->weights->blocks=weights->blocks;
+
+
+
+    if(name==FULLY_CONNECTED || name==FULLY_CONNECTED_AFTER_FLATTEN)
+        pointer_to_entity_stack->weights->grid=weights->grid;
+
 
 }
 
@@ -680,7 +700,7 @@ void initialize_layer_content_Block(LAYER** layer, Block** input){
 
 }
 
-LAYER* conv_layer(paramsCONV prmconvs, Block* input, Blocks* weights){
+LAYER* conv_layer(paramsCONV prmconvs, Block* input, Blocks* weights, uint8_t level){
 
     LAYER* layer;
 
@@ -723,6 +743,7 @@ LAYER* conv_layer(paramsCONV prmconvs, Block* input, Blocks* weights){
     layer->activation__=prmconvs.activation__;
     layer->name=prmconvs.name;
     layer->trainable_detail=trainable;
+    layer->layer_number=level;
 
     return layer;
 
@@ -730,7 +751,7 @@ LAYER* conv_layer(paramsCONV prmconvs, Block* input, Blocks* weights){
 
 
 
-LAYER* Dense(FullyConnected* input){
+LAYER* Dense(FullyConnected* input, uint8_t level){
 
     LAYER* layer;
 
@@ -745,6 +766,7 @@ LAYER* Dense(FullyConnected* input){
     layer->output_data->grid=fc_output;
     layer->name=ACTIVATION__;
     layer->trainable_detail=not_trainable;
+    layer->layer_number=level;
 
     return layer;
 
@@ -754,7 +776,7 @@ LAYER* Dense(FullyConnected* input){
 
 
 
-LAYER* pool_layer(paramsPOOL prmpool, Block* input){
+LAYER* pool_layer(paramsPOOL prmpool, Block* input, uint8_t level){
 
     LAYER* layer;
 
@@ -783,6 +805,7 @@ LAYER* pool_layer(paramsPOOL prmpool, Block* input){
     layer->output_data->block=output;
     layer->name=prmpool.name;
     layer->trainable_detail=trainable;
+    layer->layer_number=level;
 
     return layer;
 
@@ -790,7 +813,7 @@ LAYER* pool_layer(paramsPOOL prmpool, Block* input){
 
 
 
-LAYER* flatten_layer(paramsFLATTEN prmft, Block* input){
+LAYER* flatten_layer(paramsFLATTEN prmft, Block* input, uint8_t level){
 
     LAYER* layer;
 
@@ -803,13 +826,14 @@ LAYER* flatten_layer(paramsFLATTEN prmft, Block* input){
     layer->output_data->block=output;
     layer->name=prmft.name;
     layer->trainable_detail=trainable;
+    layer->layer_number=level;
 
     return layer;
 
     }
 
 
-LAYER* fcaf_layer(paramsFCAF prmfcaf, Block* input, Grid* weights){
+LAYER* fcaf_layer(paramsFCAF prmfcaf, Block* input, Grid* weights, uint8_t level){
 
     LAYER* layer;
 
@@ -840,13 +864,14 @@ LAYER* fcaf_layer(paramsFCAF prmfcaf, Block* input, Grid* weights){
     layer->output_data->fc=output;
     layer->name=prmfcaf.name;
     layer->trainable_detail=trainable;
+    layer->layer_number=level;
 
     return layer;
 
     }
 
 
-LAYER* fc_layer(paramsFC prmffc, FullyConnected* input, Grid* weights){
+LAYER* fc_layer(paramsFC prmffc, FullyConnected* input, Grid* weights, uint8_t level){
 
     LAYER* layer;
 
@@ -877,6 +902,7 @@ LAYER* fc_layer(paramsFC prmffc, FullyConnected* input, Grid* weights){
     layer->output_data->fc=output;
     layer->name=prmffc.name;
     layer->trainable_detail=trainable;
+    layer->layer_number=level;
 
 
     return layer;
@@ -884,17 +910,30 @@ LAYER* fc_layer(paramsFC prmffc, FullyConnected* input, Grid* weights){
     }
 
 
-void create_Model(Model** model, Block* X, Grid *Y, double learning_rate, uint32_t number_of_epochs){
+void create_Model(Model** model,
+                  weight_stack** weightStack,
+                  Block* X,
+                  Grid *Y,
+                  double learning_rate,
+                  uint32_t number_of_epochs,
+                  uint32_t actual_epoch){
+
+    if(actual_epoch>number_of_epochs){
+
+        write("Training done successflly ! :))) ");
+        exit(0);
+    }
 
     *model=initialize_Model();
     (*model)->first_layer=NULL;
     (*model)->final_layer=NULL;
     (*model)->X=X;
     (*model)->Y=Y;
-    (*model)->nbr_levels++;
+    (*model)->nbr_levels=1;
     (*model)->learning_rate=learning_rate;
-    (*model)->weightStack=initialize_weight_stack(1);
-    (*model)->epochs=number_of_epochs;
+    (*model)->weightStack=*weightStack;
+    //(*model)->epochs=number_of_epochs;
+    (*model)->actual_epoch=actual_epoch;
 
 }
 
@@ -992,6 +1031,7 @@ void add_CONV(Model** model,
                            weights,
                            (*model)->nbr_levels);
 
+
     }
 
     else {
@@ -1004,14 +1044,19 @@ void add_CONV(Model** model,
     }
 
 
-
     if(!(*model)->final_layer){
-        conv_l=conv_layer(params_conv,(*model)->X,weights->blocks);
+        conv_l=conv_layer(params_conv,
+                          (*model)->X,
+                          weights->blocks,
+                          (*model)->nbr_levels);
 
     }
     else{
 
-        conv_l=conv_layer(params_conv,(*model)->final_layer->output_data->block,weights->blocks);
+        conv_l=conv_layer(params_conv,
+                          (*model)->final_layer->output_data->block,
+                          weights->blocks,
+                          (*model)->nbr_levels);
 
     }
 
@@ -1039,7 +1084,9 @@ void add_POOL(Model** model, uint32_t stride,
 
     if((*model)->final_layer){
 
-        pool_l=pool_layer(params_pool,(*model)->final_layer->output_data->block);
+        pool_l=pool_layer(params_pool,
+                          (*model)->final_layer->output_data->block,
+                          (*model)->nbr_levels);
     }
     else{
 
@@ -1058,11 +1105,12 @@ void add_FLAT(Model** model){
     paramsFLATTEN params_fl={name:FLATTEN};
 
     LAYER* flatten_l=initialize_LAYER(1);
-    (*model)->nbr_levels++;
 
     if((*model)->final_layer){
 
-        flatten_l=flatten_layer(params_fl,(*model)->final_layer->output_data->block);
+        flatten_l=flatten_layer(params_fl,
+                                (*model)->final_layer->output_data->block,
+                                (*model)->nbr_levels);
     }
     else{
 
@@ -1072,6 +1120,7 @@ void add_FLAT(Model** model){
     }
 
     update_model(model,&flatten_l);
+    (*model)->nbr_levels++;
     shape_block((*model)->final_layer->output_data->block);
 
 }
@@ -1108,6 +1157,9 @@ void add_FCAF(Model** model,double (*activation)(double),
         entity_weight_stack__* e_w_s=search_layer_from_level((*model)->weightStack,
                                                              (*model)->nbr_levels);
 
+        write("actual level");
+        printf("%d\n",e_w_s->level);
+
         weights->grid=e_w_s->weights->grid;
 
     }
@@ -1120,7 +1172,8 @@ void add_FCAF(Model** model,double (*activation)(double),
 
         fcaf_l=fcaf_layer(params_fcaf,
                           (*model)->final_layer->output_data->block,
-                          weights->grid);
+                          weights->grid,
+                          (*model)->nbr_levels);
 
     }
     else{
@@ -1179,7 +1232,8 @@ void add_FC(Model** model,double (*activation)(double),
 
         fcaf_l=fc_layer(params_fc,
                         (*model)->final_layer->output_data->fc,
-                        weights->grid);
+                        weights->grid,
+                        (*model)->nbr_levels);
     }
     else{
 
@@ -1199,11 +1253,12 @@ void DENSE(Model** model){
 
 
     LAYER* act_l=initialize_LAYER(1);
-    (*model)->nbr_levels++;
+    //(*model)->nbr_levels++;
 
     if((*model)->final_layer){
 
-        act_l=Dense((*model)->final_layer->output_data->fc);
+        act_l=Dense((*model)->final_layer->output_data->fc,
+                    (*model)->nbr_levels);
     }
     else{
 
@@ -2846,6 +2901,8 @@ void Fully_Connected_After_Flatten(FullyConnected** fc,
             extract_Grid_From_Flatten_Block(input,&input_grid);
             Grid* transposed_input_grid=transpose(input_grid);
 
+            shape_grid(transposed_input_grid);
+            shape_grid(*weights_tmp);
             grid_dot_mutiplication(&Z_i,&local_fc->weights,&transposed_input_grid);
 
             A_i=deep_grid_copy(Z_i);
@@ -2863,34 +2920,7 @@ void Fully_Connected_After_Flatten(FullyConnected** fc,
 
 
             }
-    //    }
 
-    /*
-    else{
-
-            FullyConnected* local_fc=*fc;
-
-            free(local_fc->Before_Activation);
-            free(local_fc->After_Activation);
-
-            extract_Grid_From_Flatten_Block(input,&input_grid);
-            Grid* transposed_input_grid=transpose(input_grid);
-
-            grid_dot_mutiplication(&Z_i,&local_fc->weights,&transposed_input_grid);
-
-            A_i=deep_grid_copy(Z_i);
-
-            local_fc->Before_Activation=Z_i;
-
-            Grid* A_i_plus_bias=Operate(A_i,local_fc->bias,"+");
-            apply_function_to_Grid(&A_i_plus_bias,local_fc->activation);
-
-            local_fc->After_Activation=A_i_plus_bias;
-
-            shape_grid(local_fc->After_Activation);
-
-    }
-    */
 }
 
 
@@ -2946,29 +2976,6 @@ void Fully_Connected(FullyConnected** fc,
 
         }
 
-    //  }
-    /*
-    else{
-
-            FullyConnected* local_fc=*fc;
-
-            grid_dot_mutiplication(&Z_i,&local_fc->weights,&(*fc_input)->After_Activation);
-            //grid_dot_mutiplication(&A_i,&local_fc->weights,&(*fc_input)->After_Activation);
-
-            A_i=deep_grid_copy(Z_i);
-
-
-            Grid* A_i_plus_bias=Operate(A_i,local_fc->bias,"+");
-            apply_function_to_Grid(&A_i_plus_bias,local_fc->activation);
-
-            local_fc->After_Activation=A_i_plus_bias;
-            local_fc->previous_size=input_layer_size;
-            local_fc->current_size=output_layer_size;
-
-            shape_grid(local_fc->After_Activation);
-
-    }
-    */
 }
 
 
@@ -3156,12 +3163,23 @@ void calculate_deltas_fc(Model** model, LAYER** layer){
                         //write("--------------------------");
 
                         Grid* W_i=(*layer)->next_layer->kernels->grid;
-
                         Grid* partial_derivative;
 
                         grid_dot_mutiplication(&partial_derivative,&deltas_plus_one,&A_i);
                         multiply_by_digit(&partial_derivative,(*model)->learning_rate);
                         W_i=Operate(W_i,partial_derivative,"-");
+
+
+                        Kernels* updated_weights=(Kernels*)malloc(sizeof(Kernels));
+                        updated_weights->grid=W_i;
+
+                        update_weights_layer__(&(*model)->weightStack,
+                                               (*layer)->layer_number+1,
+                                               updated_weights,
+                                               (*layer)->name
+                                               );
+
+                        //entity_weight_stack__* e_w_s=search_layer_from_level((*model)->weightStack,(*layer)->layer_number);
 
                     }
                     //Next thing .. we will update the next layer for sure :)))
@@ -3693,9 +3711,17 @@ void calculate_deltas_conv(Model** model, LAYER** layer){
 
     }
 
+    Kernels* updated_weights=(Kernels*)malloc(sizeof(Kernels));
+    updated_weights->blocks=weights;
+    update_weights_layer__(&(*model)->weightStack,
+                           (*layer)->layer_number,
+                           updated_weights,
+                           (*layer)->name
+                           );
+
     (*layer)->kernels->blocks=weights;
 
-    write("----------------------------------");
+    //write("----------------------------------");
 
 
 
@@ -3860,6 +3886,25 @@ void summary_layers(Model** model,char* choice){
 
 }
 
+void debug_weight_stack(weight_stack** w_s){
+    weight_stack* ws=*w_s;
+
+    write("The trainable layers are :");
+
+    while(ws){
+        write(getType(ws->entity_stack->name));
+        if(ws->entity_stack->name==CONV)
+            shape_blocks(ws->entity_stack->weights->blocks);
+        else
+            shape_grid(ws->entity_stack->weights->grid);
+
+        write("level :");
+        printf("\n%d\n",ws->entity_stack->level);
+
+        ws=ws->next_stack;
+    }
+
+}
 
 void backpropagation(Model** model){
 
@@ -3890,16 +3935,26 @@ void backpropagation(Model** model){
 
 void model_code(){
 
-
     Model* model;
+    weight_stack* weightStack=NULL;
 
     Block* X;
-
     create_Block(&X,3,80,80,"random","float");
+    Grid* Y=fill_index(12,11);
 
-    Grid* Y=fill_index(12,6);
+    uint16_t epochs=20;
+    uint16_t counter;
 
-    create_Model(&model,X,Y,.2,20);
+    for(counter=0;counter<epochs;counter++){
+
+    create_Model(&model,
+                 &weightStack,
+                 X,
+                 Y,
+                 .2,
+                 20,
+                 counter);
+
 
     add_CONV(&model,3,1,0,5,&relu);
     add_POOL(&model,2,2,3,"max");
@@ -3919,11 +3974,16 @@ void model_code(){
     add_FC(&model,&sigmoid,12);
     DENSE(&model);
 
+    display_Grid(model->final_layer->output_data->grid);
+
+    if(!counter)
     summary_layers(&model,"forward");
 
     backpropagation(&model);
 
-    display_Grid(model->final_layer->output_data->grid);
+    weightStack=model->weightStack;
+
+    }
 
 }
 
@@ -3933,7 +3993,6 @@ int main()
 
     //Debugging the code
     model_code();
-
 
     printf("\nDONE :))) ! \n\n");
 
