@@ -59,3 +59,5 @@ The output gives us :
     0.1927474058 |
     
 which corresponds to the 12th class as stated in the main code.
+
+---
