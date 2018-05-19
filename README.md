@@ -2,7 +2,7 @@
 
 A minimalist engine for Deep and Shallow convolutional neural networks tried on a single random image / signe target. It allows to build layer-based convolutional models.
 
-
+A snippet of the main code :
 `
 create_Model(&model,
                  &weightStack,
@@ -16,10 +16,10 @@ create_Model(&model,
 
     //A first convolution layer:
     //1st parameter is the depth of the input
-    //2nd par° is the stride
-    //3rd par° is the padding
-    //4rth par° is the kernel size;
-    //5th par° is the activation function ;
+    //2nd parameter is the stride
+    //3rd parameter is the padding
+    //4rth parameter is the kernel size;
+    //5th parameter is the activation function ;
 
     add_CONV(&model,3,1,0,5,&relu);
 
