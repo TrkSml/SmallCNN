@@ -65,4 +65,4 @@ which corresponds to the 12th class as stated in the main code.
 Further improvements are expected in the future such as :
 * Additional layers
 * Input / Output image integration
-* Batch trainig modes
+* Batch training modes
