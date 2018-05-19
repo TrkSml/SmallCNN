@@ -2,8 +2,18 @@
 
 A minimalist engine for Deep and Shallow convolutional neural networks tried on a single random image / signe target. It allows to build layer-based convolutional models.
 
-A snippet of the main code :
+A snippet of a single training loop :
 
+``
+
+    create_Model(&model, // the model
+                 &weightStack,  // the weight stack
+                 X,  // the input
+                 Y,  // the target
+                 .2,  // the learning rate
+                 20,  // number of epochs
+                 counter); // the actual epoch
+                 
     //A first convolution layer:
     //1st parameter is the depth of the input
     //2nd parameter is the stride
@@ -32,4 +42,4 @@ A snippet of the main code :
     add_FC(&model,&sigmoid,12);
     DENSE(&model);
     
-`
+``
