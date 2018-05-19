@@ -3,16 +3,6 @@
 A minimalist engine for Deep and Shallow convolutional neural networks tried on a single random image / signe target. It allows to build layer-based convolutional models.
 
 A snippet of the main code :
-`
-create_Model(&model,
-                 &weightStack,
-                 X,
-                 Y,
-                 .2,
-                 20,
-                 counter);
-
-
 
     //A first convolution layer:
     //1st parameter is the depth of the input
