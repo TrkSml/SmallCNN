@@ -1,4 +1,4 @@
-// __author__=Tarek Samaali
+
 
 #define UPPER_BOUND .5
 
@@ -2996,6 +2996,7 @@ Grid* fill_index(unsigned int height, uint32_t index){
 }
 
 
+/*
 Block* to_categorical(Grid* input){
 
     uint32_t depth=input->height;
@@ -3019,6 +3020,8 @@ Block* to_categorical(Grid* input){
     return output;
 
 }
+*/
+
 
 void Softmax_Activation(Grid** fc_output ,FullyConnected** fc){
 
@@ -3917,4 +3920,68 @@ void backpropagation(Model** model){
     }
 
 }
+
+void create_unique_image_elements(Blocks **urn,
+                                        uint32_t nbr,
+                                        uint32_t depth,
+                                        uint32_t height,
+                                        uint32_t width){
+
+    *urn=initialize_Blocks(1);
+    (*urn)->blocks=initialize_pointer_Block(nbr);
+    (*urn)->length=nbr;
+
+    uint8_t counter;
+
+    for(counter=0;counter<nbr;counter++){
+
+        Block* block;
+        create_Block(&block,depth,
+                            height,
+                            width,
+                            "random",
+                            "float");
+
+        (*urn)->blocks[counter]=block;
+
+    }
+
+}
+
+typedef struct{
+
+    uint8_t length;
+    Grid** grids;
+
+}Grids;
+
+
+Grids* to_categorical(Grid* numerical_target){
+
+    Grids* categorical_target=(Grids*)malloc(sizeof(Grids));
+    categorical_target->length=numerical_target->height;
+    categorical_target->grids=initialize_pointer_Grid(numerical_target->height);
+
+    uint8_t counter;
+
+    for(counter=0;counter<categorical_target->length;counter++){
+
+        Grid* single_categorical_output=fill_index(categorical_target->length,
+                                                   numerical_target->grid[counter][0]);
+
+        categorical_target->grids[counter]=single_categorical_output;
+
+    }
+
+    return categorical_target;
+
+}
+
+
+typedef struct{
+
+    Blocks* input;
+    Grids* output;
+
+}Dataset;
 
